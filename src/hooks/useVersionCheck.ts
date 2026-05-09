@@ -22,8 +22,8 @@ export interface LatestRelease {
 }
 
 /**
- * 检查 GitHub 最新 Release 版本。
- * - 仅当最新 Release 版本高于当前 __APP_VERSION__ 时提示。
+ * 检查上游 GitHub 最新 Release 版本。
+ * - 仅当上游最新 Release 版本高于当前 __APP_VERSION__ 时提示。
  * - 用户点击后调用 dismiss()，本次浏览期间不再提示（sessionStorage）。
  * - 刷新页面后重新检查。
  */

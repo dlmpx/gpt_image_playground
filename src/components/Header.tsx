@@ -12,17 +12,19 @@ export default function Header() {
     <>
       <header data-no-drag-select className="safe-area-top fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur border-b border-gray-200 dark:border-white/[0.08]">
         <div className="safe-area-x safe-header-inner max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-start gap-1">
-            <h1 className="text-lg font-bold tracking-tight">
-              <a
-                href="https://github.com/CookSleep/gpt_image_playground"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-800 dark:text-gray-100 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              >
-                GPT Image Playground
-              </a>
+          <div className="flex items-start gap-2">
+            <h1 className="text-lg font-bold tracking-tight text-gray-800 dark:text-gray-100">
+              GPT Image Playground
             </h1>
+            <a
+              href="https://github.com/CookSleep/gpt_image_playground"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-1.5 py-0.5 mt-0.5 rounded border border-gray-300 dark:border-white/[0.16] text-[10px] font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors leading-none"
+              title="查看上游仓库"
+            >
+              UPSTREAM
+            </a>
             {hasUpdate && latestRelease && (
               <a
                 href={latestRelease.url}
@@ -30,9 +32,9 @@ export default function Header() {
                 rel="noopener noreferrer"
                 onClick={dismiss}
                 className="px-1.5 py-0.5 mt-0.5 rounded border border-red-500/30 text-[10px] font-bold bg-red-500 text-white hover:bg-red-600 transition-colors animate-fade-in leading-none"
-                title={`新版本 ${latestRelease.tag}`}
+                title={`上游新版本 ${latestRelease.tag}`}
               >
-                NEW
+                UPD
               </a>
             )}
           </div>

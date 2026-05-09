@@ -1,10 +1,18 @@
 # GPT Image Playground
 
+> **项目身份声明**
+>
+> 当前仓库是基于开源项目 [`CookSleep/gpt_image_playground`](https://github.com/CookSleep/gpt_image_playground) 的个人二次开发分支，**不是原始首发项目**。感谢上游作者 CookSleep 的开源工作。
+>
+> 本仓库会保留原项目的 `MIT License` 与归属说明，并在此基础上继续演进为一个**本地优先的个人图像创作工作台**，重点服务“四视图角色设计抽卡工作流”。如果你想了解当前分支的定位、边界与后续规划，请参见 [项目宪章](docs/PROJECT_CHARTER.md)。
+
 基于 OpenAI 图像生成接口的图片生成与编辑工具。提供简洁精美的 Web UI，支持文本生图、参考图与遮罩编辑，数据纯本地化存储，带来流畅的历史记录与参数管理体验。
 
-> 若需调用非 HTTPS 的内网或本地 HTTP API，请使用 GitHub Pages 版本或自行部署，Vercel 部署的体验版绑定的 `.dev` 域名因安全策略通常要求接口必须为 HTTPS。
+> 下方在线体验、镜像地址与 Star History 默认指向**上游项目**，仅用于说明与致谢，**不代表当前二次开发分支已经独立发布**。如果你要部署或公开当前分支，请替换为你自己的仓库、镜像与站点地址。
+>
+> 若需调用非 HTTPS 的内网或本地 HTTP API，请使用 GitHub Pages 版本或自行部署，Vercel 部署的 `.dev` 域名因安全策略通常要求接口必须为 HTTPS。
 
-[**🌐 Vercel 在线体验**](https://gpt-image-playground.cooksleep.dev) &nbsp;|&nbsp; [**🌐 GitHub Pages 在线体验**](https://cooksleep.github.io/gpt_image_playground)
+[**🌐 上游 Vercel 演示（非当前分支）**](https://gpt-image-playground.cooksleep.dev) &nbsp;|&nbsp; [**🌐 上游 GitHub Pages 演示（非当前分支）**](https://cooksleep.github.io/gpt_image_playground)
 
 ---
 
@@ -80,6 +88,8 @@
 <details>
 <summary><strong>▲ 方式一：Vercel 一键部署 (推荐)</strong></summary>
 
+> 说明：下方按钮中的仓库地址仍指向**上游仓库**。如果你部署的是当前二次开发分支，请在 Vercel 中导入你自己的仓库地址，而不是直接使用上游链接。
+
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FCookSleep%2Fgpt_image_playground&project-name=gpt-image-playground&repository-name=gpt-image-playground)
 
 点击上方按钮导入仓库即可，Vercel 会自动执行构建并部署静态文件。
@@ -88,7 +98,7 @@
 
 **配置自动更新**：
 
-本项目已在 `vercel.json` 中关闭了默认的自动部署。若需在同步 GitHub 上游代码后自动更新 Vercel 部署：
+当前仓库保留了上游项目的 `vercel.json` 配置。若你维护的是一个 fork，并希望在同步上游后自动更新 Vercel 部署：
 
 1. 在 Vercel 项目设置 **Settings -> Git** 的 **Deploy Hooks** 中创建一个名为 `Release` 的 Hook（Branch 填 `main`）并复制生成的 URL。
 2. 在你 Fork 的 GitHub 仓库设置 **Settings -> Secrets and variables -> Actions** 中，新建 Secret `VERCEL_DEPLOY_HOOK`，填入刚才的 URL。
@@ -133,7 +143,9 @@ $env:VITE_DEFAULT_API_URL="https://api.openai.com/v1"; npm run deploy:cf
 <details>
 <summary><strong>🐳 方式三：Docker 部署</strong></summary>
 
-官方镜像已发布至 GitHub Container Registry。Docker 部署支持在运行时注入默认配置。
+> 说明：下方镜像地址是**上游镜像**。如果你要发布当前二次开发分支，请改用你自己的镜像仓库地址。
+
+上游镜像已发布至 GitHub Container Registry。Docker 部署支持在运行时注入默认配置。
 
 **环境变量说明：**
 
@@ -173,7 +185,7 @@ services:
 
 **更新说明：**
 
-使用 `latest` 标签时，重新拉取镜像并重启即可更新（如 `docker compose pull && docker compose up -d`）。若需固定版本可使用官方提供的版本号标签（如 `0.2.x`）。
+使用 `latest` 标签时，重新拉取镜像并重启即可更新（如 `docker compose pull && docker compose up -d`）。若需固定版本可使用上游发布的版本号标签（如 `0.2.x`）。
 
 </details>
 
@@ -233,7 +245,7 @@ npm run build
 - `?model=gpt-image-2`（未传时按 `apiMode` 使用默认模型）
 - `?codexCli=true`（开启 Codex CLI 兼容模式）
 
-例如，集成到 New API 的聊天系统：
+例如，以上游公开部署为例，集成到 New API 的聊天系统：
 
 ```text
 https://gpt-image-playground.cooksleep.dev?apiUrl={address}&apiKey={key}&model={model}
@@ -313,8 +325,10 @@ JSON 结构示例：
 
 本项目基于 [MIT License](LICENSE) 开源。
 
+上游项目：[`CookSleep/gpt_image_playground`](https://github.com/CookSleep/gpt_image_playground)
+
 特别致谢：[LINUX DO](https://linux.do)
 
-## ⭐ Star History
+## ⭐ Upstream Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=CookSleep/gpt_image_playground&type=Date)](https://www.star-history.com/#CookSleep/gpt_image_playground&Date)
