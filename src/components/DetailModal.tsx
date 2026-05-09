@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask } from '../store'
+import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { formatImageRatio } from '../lib/size'
@@ -18,6 +18,10 @@ export default function DetailModal() {
   const showToast = useStore((s) => s.showToast)
   const settings = useStore((s) => s.settings)
   const dismissedCodexCliPrompts = useStore((s) => s.dismissedCodexCliPrompts)
+  const workflowRuns = useStore((s) => s.workflowRuns)
+  const workflowCandidates = useStore((s) => s.workflowCandidates)
+  const activeWorkflowRunId = useStore((s) => s.activeWorkflowRunId)
+  const setActiveWorkflowRun = useStore((s) => s.activeWorkflowRunId)
 
   const [imageIndex, setImageIndex] = useState(0)
   const [imageSrcs, setImageSrcs] = useState<Record<string, string>>({})
@@ -269,6 +273,36 @@ export default function DetailModal() {
     retryTask(task)
     setDetailTaskId(null)
   }
+
+  const handleAddToWorkflow = async () => {
+    const primaryImg = task.outputImages?.[0]
+    if (!primaryImg) {
+      showToast('No output image to add', 'error')
+      return
+    }
+    // If no active run, create one first
+    let runId = useStore.getState().activeWorkflowRunId
+    if (!runId) {
+      const run = await createWorkflowRun('New Character ' + new Date().toLocaleDateString())
+      runId = run.id
+    }
+    await addWorkflowCandidateFromTask(task.id, 1, runId, primaryImg)
+    setDetailTaskId(null)
+  }
+
+  const handlePromoteCandidate = async () => {
+    const candidate = useStore.getState().workflowCandidates.find(
+      (c) => c.sourceTaskId === task.id
+    )
+    if (candidate) {
+      await promoteCandidateToStage(candidate.id)
+      setDetailTaskId(null)
+    }
+  }
+
+  // Check if this task has a workflow candidate
+  const taskCandidate = workflowCandidates.find((c) => c.sourceTaskId === task.id)
+  const canPromote = taskCandidate && taskCandidate.decision !== 'promoted' && taskCandidate.stage < 4
 
   return (
     <div
@@ -635,6 +669,33 @@ export default function DetailModal() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
               </svg>
             </button>
+            {!taskCandidate && task.status === 'done' && task.outputImages.length > 0 && (
+              <button
+                onClick={handleAddToWorkflow}
+                className="col-span-2 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-500/20 transition text-sm font-medium whitespace-nowrap"
+              >
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                纳入工作流
+              </button>
+            )}
+            {canPromote && (
+              <button
+                onClick={handlePromoteCandidate}
+                className="col-span-2 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition text-sm font-medium whitespace-nowrap"
+              >
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+                晋级到阶段{taskCandidate.stage + 1}
+              </button>
+            )}
+            {taskCandidate && (
+              <span className="col-span-2 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50/50 dark:bg-purple-500/5 text-purple-500/60 dark:text-purple-400/60 text-xs">
+                阶段{taskCandidate.stage} · {taskCandidate.decision}
+              </span>
+            )}
           </div>
         </div>
       </div>

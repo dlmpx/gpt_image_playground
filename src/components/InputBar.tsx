@@ -1,10 +1,11 @@
 import { useRef, useEffect, useCallback, useState, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useStore, submitTask, addImageFromFile, updateTaskInStore, removeMultipleTasks, getCachedImage, ensureImageCached } from '../store'
+import { useStore, submitTask, addImageFromFile, updateTaskInStore, removeMultipleTasks, getCachedImage, ensureImageCached, setShowWorkflowPanel } from '../store'
 import { DEFAULT_PARAMS } from '../types'
 import { getActiveApiProfile, normalizeSettings } from '../lib/apiProfiles'
 import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getOutputImageLimitForSettings, normalizeParamsForSettings } from '../lib/paramCompatibility'
 import { normalizeImageSize } from '../lib/size'
+import { getTemplateByStage } from '../lib/workflowTemplates'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import Select from './Select'
 import SizePickerModal from './SizePickerModal'
@@ -55,6 +56,9 @@ export default function InputBar() {
   const filterStatus = useStore((s) => s.filterStatus)
   const filterFavorite = useStore((s) => s.filterFavorite)
   const searchQuery = useStore((s) => s.searchQuery)
+  const activeWorkflowRunId = useStore((s) => s.activeWorkflowRunId)
+  const workflowRuns = useStore((s) => s.workflowRuns)
+  const showWorkflowPanel = useStore((s) => s.showWorkflowPanel)
 
   const filteredTasks = useMemo(() => {
     const sorted = [...tasks].sort((a, b) => b.createdAt - a.createdAt)
@@ -1337,6 +1341,42 @@ export default function InputBar() {
               renderImageThumbs()
             )
           )}
+
+          {/* Workflow stage indicator */}
+          {activeWorkflowRunId && (() => {
+            const run = workflowRuns.find(r => r.id === activeWorkflowRunId)
+            const template = run ? getTemplateByStage(run.currentStage) : undefined
+            return (
+              <div className="mb-3 px-3 py-2 rounded-xl bg-purple-50/70 dark:bg-purple-500/5 border border-purple-200/50 dark:border-purple-500/10">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                    Stage {run?.currentStage}: {template?.name || "Unknown"}
+                  </span>
+                  <button
+                    onClick={() => setShowWorkflowPanel(!showWorkflowPanel)}
+                    className="text-xs text-purple-400 hover:text-purple-600 dark:hover:text-purple-300 underline"
+                  >
+                    {showWorkflowPanel ? "Hide panel" : "Workflow panel"}
+                  </button>
+                </div>
+                {template?.advanceInstruction && (
+                  <p className="text-xs text-purple-500/70 dark:text-purple-400/60 leading-relaxed">
+                    {template.advanceInstruction}
+                  </p>
+                )}
+                {template?.riskHints && template.riskHints.length > 0 && (
+                  <details className="mt-1">
+                    <summary className="text-xs text-amber-500 cursor-pointer">Risk hints ({template.riskHints.length})</summary>
+                    <ul className="mt-1 pl-4 text-xs text-amber-600/70 dark:text-amber-400/60 list-disc">
+                      {template.riskHints.map((hint, i) => (
+                        <li key={i}>{hint}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )
+          })()}
 
           {/* 输入框 */}
           <textarea

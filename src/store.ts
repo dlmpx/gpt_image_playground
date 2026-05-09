@@ -34,6 +34,22 @@ import { getCustomQueuedImageResult } from './lib/openaiCompatibleImageApi'
 import { validateMaskMatchesImage } from './lib/canvasImage'
 import { orderInputImagesForMask } from './lib/mask'
 import { getChangedParams, normalizeParamsForSettings } from './lib/paramCompatibility'
+import type {
+  WorkflowStage,
+  WorkflowTemplate,
+  WorkflowRun,
+  WorkflowCandidate,
+  CandidateDecision,
+} from './types'
+import {
+  getAllWorkflowRuns,
+  getWorkflowCandidatesByRun,
+  getAllWorkflowCandidates,
+  putWorkflowRun,
+  putWorkflowCandidate,
+  deleteWorkflowRun,
+  deleteWorkflowCandidate,
+} from './lib/db'
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
 
 // ===== Image cache =====
@@ -353,6 +369,13 @@ interface AppState {
   toast: { message: string; type: 'info' | 'success' | 'error' } | null
   showToast: (message: string, type?: 'info' | 'success' | 'error') => void
 
+  // Workflow
+  workflowRuns: WorkflowRun[]
+  workflowCandidates: WorkflowCandidate[]
+  activeWorkflowRunId: string | null
+  activeCandidateId: string | null
+  showWorkflowPanel: boolean
+
   // Confirm dialog
   confirmDialog: {
     title: string
@@ -537,6 +560,13 @@ export const useStore = create<AppState>()(
           set((s) => (s.toast?.message === message ? { toast: null } : s))
         }, 3000)
       },
+
+      // Workflow
+      workflowRuns: [],
+      workflowCandidates: [],
+      activeWorkflowRunId: null,
+      activeCandidateId: null,
+      showWorkflowPanel: false,
 
       // Confirm
       confirmDialog: null,
@@ -892,6 +922,17 @@ export async function initStore() {
   const { tasks, interruptedTasks } = markInterruptedOpenAIRunningTasks(storedTasks)
   await Promise.all(interruptedTasks.map((task) => putTask(task)))
   useStore.getState().setTasks(tasks)
+  // load workflow data
+  try {
+    const storedRuns = await getAllWorkflowRuns()
+    const storedCandidates = await getAllWorkflowCandidates()
+    useStore.setState({
+      workflowRuns: storedRuns,
+      workflowCandidates: storedCandidates,
+    })
+  } catch (err) {
+    console.error('Failed to load workflow data:', err)
+  }
   for (const task of tasks) {
     if (
       task.apiProvider === 'fal' &&
@@ -1766,6 +1807,186 @@ export async function importData(file: File, options: ImportOptions = { importCo
 }
 
 /** 添加图片到输入（文件上传） */
+
+// ===== Workflow Actions =====
+
+/** Create a new character workflow run */
+export async function createWorkflowRun(name: string, goalStyle?: string): Promise<WorkflowRun> {
+  const id = genId()
+  const now = Date.now()
+  const run: WorkflowRun = {
+    id,
+    name,
+    goalStyle,
+    currentStage: 1,
+    rootCandidateIds: [],
+    createdAt: now,
+    updatedAt: now,
+  }
+  await putWorkflowRun(run)
+  const state = useStore.getState()
+  useStore.setState({
+    workflowRuns: [...state.workflowRuns, run],
+    activeWorkflowRunId: id,
+    activeCandidateId: null,
+  })
+  state.showToast('Created workflow run', 'success')
+  return run
+}
+
+/** Add a candidate from an existing task into a workflow */
+export async function addWorkflowCandidateFromTask(
+  taskId: string,
+  stage: WorkflowStage,
+  runId: string,
+  primaryImageId: string,
+  options: { parentCandidateId?: string | null; cultureDirection?: string } = {},
+): Promise<WorkflowCandidate> {
+  const id = genId()
+  const now = Date.now()
+  const candidate: WorkflowCandidate = {
+    id,
+    runId,
+    stage,
+    sourceTaskId: taskId,
+    primaryImageId,
+    parentCandidateId: options.parentCandidateId ?? null,
+    decision: 'draft',
+    cultureDirection: options.cultureDirection,
+    createdAt: now,
+    updatedAt: now,
+  }
+  await putWorkflowCandidate(candidate)
+  const state = useStore.getState()
+  useStore.setState({
+    workflowCandidates: [...state.workflowCandidates, candidate],
+    activeCandidateId: id,
+  })
+  if (stage === 1) {
+    const run = state.workflowRuns.find((r) => r.id === runId)
+    if (run && !run.rootCandidateIds.includes(id)) {
+      const updatedRun: WorkflowRun = {
+        ...run,
+        rootCandidateIds: [...run.rootCandidateIds, id],
+        updatedAt: now,
+      }
+      await putWorkflowRun(updatedRun)
+      useStore.setState({
+        workflowRuns: state.workflowRuns.map((r) => (r.id === runId ? updatedRun : r)),
+      })
+    }
+  }
+  state.showToast('Added candidate to workflow', 'success')
+  return candidate
+}
+
+/** Promote a candidate to the next stage */
+export async function promoteCandidateToStage(candidateId: string): Promise<void> {
+  const state = useStore.getState()
+  const candidate = state.workflowCandidates.find((c) => c.id === candidateId)
+  if (!candidate) {
+    state.showToast('Candidate not found', 'error')
+    return
+  }
+  const run = state.workflowRuns.find((r) => r.id === candidate.runId)
+  if (!run) {
+    state.showToast('Workflow run not found', 'error')
+    return
+  }
+  const nextStage = (candidate.stage + 1) as WorkflowStage
+  if (nextStage > 4) {
+    state.showToast('Already at final stage', 'info')
+    return
+  }
+  const updatedCandidate: WorkflowCandidate = {
+    ...candidate,
+    decision: 'promoted',
+    updatedAt: Date.now(),
+  }
+  await putWorkflowCandidate(updatedCandidate)
+  const updatedRun: WorkflowRun = {
+    ...run,
+    currentStage: nextStage,
+    activeCandidateId: candidateId,
+    updatedAt: Date.now(),
+  }
+  await putWorkflowRun(updatedRun)
+  const primaryDataUrl = await ensureImageCached(candidate.primaryImageId)
+  if (primaryDataUrl) {
+    const existingImages = state.inputImages
+    if (!existingImages.some((img) => img.id === candidate.primaryImageId)) {
+      state.setInputImages([{ id: candidate.primaryImageId, dataUrl: primaryDataUrl }])
+    }
+  }
+  useStore.setState({
+    workflowCandidates: state.workflowCandidates.map((c) =>
+      c.id === candidateId ? updatedCandidate : c,
+    ),
+    workflowRuns: state.workflowRuns.map((r) =>
+      r.id === run.id ? updatedRun : r,
+    ),
+    activeCandidateId: candidateId,
+  })
+  state.showToast(
+    "Promoted to stage " + nextStage,
+    'success',
+  )
+}
+
+/** Set active workflow run */
+export function setActiveWorkflowRun(runId: string | null) {
+  const state = useStore.getState()
+  const run = runId ? state.workflowRuns.find((r) => r.id === runId) ?? null : null
+  useStore.setState({
+    activeWorkflowRunId: runId,
+    activeCandidateId: run?.activeCandidateId ?? null,
+  })
+}
+
+/** Set active candidate */
+export function setActiveCandidate(candidateId: string | null) {
+  useStore.setState({ activeCandidateId: candidateId })
+}
+
+/** Toggle workflow panel visibility */
+export function setShowWorkflowPanel(show: boolean) {
+  useStore.setState({ showWorkflowPanel: show })
+}
+
+/** Delete a workflow run and all its candidates */
+export async function removeWorkflowRun(runId: string): Promise<void> {
+  const state = useStore.getState()
+  const candidates = state.workflowCandidates.filter((c) => c.runId === runId)
+  for (const candidate of candidates) {
+    await deleteWorkflowCandidate(candidate.id)
+  }
+  await deleteWorkflowRun(runId)
+  useStore.setState({
+    workflowRuns: state.workflowRuns.filter((r) => r.id !== runId),
+    workflowCandidates: state.workflowCandidates.filter((c) => c.runId !== runId),
+    activeWorkflowRunId: state.activeWorkflowRunId === runId ? null : state.activeWorkflowRunId,
+    activeCandidateId: null,
+  })
+  state.showToast('Workflow run deleted', 'success')
+}
+
+/** Update candidate decision status */
+export async function setCandidateDecision(
+  candidateId: string,
+  decision: CandidateDecision,
+): Promise<void> {
+  const state = useStore.getState()
+  const candidate = state.workflowCandidates.find((c) => c.id === candidateId)
+  if (!candidate) return
+  const updated: WorkflowCandidate = { ...candidate, decision, updatedAt: Date.now() }
+  await putWorkflowCandidate(updated)
+  useStore.setState({
+    workflowCandidates: state.workflowCandidates.map((c) =>
+      c.id === candidateId ? updated : c,
+    ),
+  })
+}
+
 export async function addImageFromFile(file: File): Promise<void> {
   if (!file.type.startsWith('image/')) return
   const dataUrl = await fileToDataUrl(file)

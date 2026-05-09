@@ -299,3 +299,58 @@ export interface ExportData {
     thumbnailVersion?: number
   }>
 }
+
+// ===== GSD Workflow Types =====
+
+export type WorkflowStage = 1 | 2 | 3 | 4
+
+export interface WorkflowTemplate {
+  id: string
+  name: string
+  stage: WorkflowStage
+  basePrompt: string
+  cultureBiasNotes?: string
+  lockRules?: string
+  riskHints?: string[]
+  reviewChecklist?: string[]
+  defaultParams: Partial<TaskParams>
+  advanceInstruction?: string
+}
+
+export interface WorkflowRun {
+  id: string
+  name: string
+  goalStyle?: string
+  currentStage: WorkflowStage
+  activeCandidateId?: string | null
+  rootCandidateIds: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export type CandidateDecision = "draft" | "keep" | "promoted" | "discarded" | "favorite" | "primary"
+
+export interface WorkflowCandidate {
+  id: string
+  runId: string
+  stage: WorkflowStage
+  sourceTaskId: string
+  primaryImageId: string
+  parentCandidateId: string | null
+  derivedFromTaskId?: string | null
+  decision: CandidateDecision
+  notes?: string
+  cultureDirection?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface WorkflowPromotion {
+  id: string
+  runId: string
+  fromCandidateId: string
+  fromStage: WorkflowStage
+  toStage: WorkflowStage
+  newTaskSeed?: string
+  createdAt: number
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import type { TaskRecord } from '../types'
-import { useStore, ensureImageThumbnailCached, subscribeImageThumbnail, updateTaskInStore, retryTask } from '../store'
+import { useStore, ensureImageThumbnailCached, subscribeImageThumbnail, updateTaskInStore, retryTask, addWorkflowCandidateFromTask } from '../store'
 import { formatImageRatio } from '../lib/size'
 import { ParamValue } from '../lib/paramDisplay'
 
@@ -31,6 +31,8 @@ export default function TaskCard({
   const [swipeActionActive, setSwipeActionActive] = useState(false)
   const toggleTaskSelection = useStore((s) => s.toggleTaskSelection)
   const settings = useStore((s) => s.settings)
+  const activeWorkflowRunId = useStore((s) => s.activeWorkflowRunId)
+  const workflowCandidates = useStore((s) => s.workflowCandidates)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const swipeResetTimerRef = useRef<number | null>(null)
   const suppressClickUntilRef = useRef(0)
@@ -375,6 +377,21 @@ export default function TaskCard({
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              )}
+              {activeWorkflowRunId && task.status === 'done' && task.outputImages.length > 0 && !workflowCandidates.some(c => c.sourceTaskId === task.id) && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const primaryImg = task.outputImages[0]
+                    addWorkflowCandidateFromTask(task.id, 1, activeWorkflowRunId!, primaryImg)
+                  }}
+                  className="p-1.5 rounded-md hover:bg-purple-50 dark:hover:bg-purple-950/30 text-gray-400 hover:text-purple-500 transition"
+                  title="Add to workflow"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
                 </button>
               )}

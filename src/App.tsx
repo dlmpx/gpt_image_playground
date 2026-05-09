@@ -14,6 +14,7 @@ import ConfirmDialog from './components/ConfirmDialog'
 import Toast from './components/Toast'
 import MaskEditorModal from './components/MaskEditorModal'
 import ImageContextMenu from './components/ImageContextMenu'
+import WorkflowPanel from './components/WorkflowPanel'
 
 export default function App() {
   const setSettings = useStore((s) => s.setSettings)
@@ -69,6 +70,7 @@ export default function App() {
       <Toast />
       <MaskEditorModal />
       <ImageContextMenu />
+      <WorkflowPanel />
     </>
   )
 }

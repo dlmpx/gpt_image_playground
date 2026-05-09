@@ -1,10 +1,13 @@
-import type { TaskRecord, StoredImage, StoredImageThumbnail } from '../types'
+import type { TaskRecord, StoredImage, StoredImageThumbnail, WorkflowTemplate, WorkflowRun, WorkflowCandidate } from '../types'
 
 const DB_NAME = 'gpt-image-playground'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const STORE_TASKS = 'tasks'
 const STORE_IMAGES = 'images'
 const STORE_THUMBNAILS = 'thumbnails'
+const STORE_WORKFLOW_TEMPLATES = 'workflowTemplates'
+const STORE_WORKFLOW_RUNS = 'workflowRuns'
+const STORE_WORKFLOW_CANDIDATES = 'workflowCandidates'
 const THUMBNAIL_MAX_SIZE = 720
 const THUMBNAIL_QUALITY = 0.9
 const THUMBNAIL_VERSION = 2
@@ -64,6 +67,63 @@ export function deleteTask(id: string): Promise<undefined> {
 
 export function clearTasks(): Promise<undefined> {
   return dbTransaction(STORE_TASKS, 'readwrite', (s) => s.clear())
+}
+
+
+// ===== Workflow Templates =====
+
+export function getAllWorkflowTemplates(): Promise<WorkflowTemplate[]> {
+  return dbTransaction(STORE_WORKFLOW_TEMPLATES, 'readonly', (s) => s.getAll())
+}
+
+export function getWorkflowTemplate(id: string): Promise<WorkflowTemplate | undefined> {
+  return dbTransaction(STORE_WORKFLOW_TEMPLATES, 'readonly', (s) => s.get(id))
+}
+
+export function putWorkflowTemplate(template: WorkflowTemplate): Promise<IDBValidKey> {
+  return dbTransaction(STORE_WORKFLOW_TEMPLATES, 'readwrite', (s) => s.put(template))
+}
+
+// ===== Workflow Runs =====
+
+export function getAllWorkflowRuns(): Promise<WorkflowRun[]> {
+  return dbTransaction(STORE_WORKFLOW_RUNS, 'readonly', (s) => s.getAll())
+}
+
+export function getWorkflowRun(id: string): Promise<WorkflowRun | undefined> {
+  return dbTransaction(STORE_WORKFLOW_RUNS, 'readonly', (s) => s.get(id))
+}
+
+export function putWorkflowRun(run: WorkflowRun): Promise<IDBValidKey> {
+  return dbTransaction(STORE_WORKFLOW_RUNS, 'readwrite', (s) => s.put(run))
+}
+
+export function deleteWorkflowRun(id: string): Promise<undefined> {
+  return dbTransaction(STORE_WORKFLOW_RUNS, 'readwrite', (s) => s.delete(id))
+}
+
+// ===== Workflow Candidates =====
+
+export function getAllWorkflowCandidates(): Promise<WorkflowCandidate[]> {
+  return dbTransaction(STORE_WORKFLOW_CANDIDATES, 'readonly', (s) => s.getAll())
+}
+
+export function getWorkflowCandidatesByRun(runId: string): Promise<WorkflowCandidate[]> {
+  return dbTransaction(STORE_WORKFLOW_CANDIDATES, 'readonly', (s) => s.getAll()).then(
+    (all) => all.filter((c: WorkflowCandidate) => c.runId === runId)
+  )
+}
+
+export function getWorkflowCandidate(id: string): Promise<WorkflowCandidate | undefined> {
+  return dbTransaction(STORE_WORKFLOW_CANDIDATES, 'readonly', (s) => s.get(id))
+}
+
+export function putWorkflowCandidate(candidate: WorkflowCandidate): Promise<IDBValidKey> {
+  return dbTransaction(STORE_WORKFLOW_CANDIDATES, 'readwrite', (s) => s.put(candidate))
+}
+
+export function deleteWorkflowCandidate(id: string): Promise<undefined> {
+  return dbTransaction(STORE_WORKFLOW_CANDIDATES, 'readwrite', (s) => s.delete(id))
 }
 
 // ===== Images =====
