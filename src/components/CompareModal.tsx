@@ -309,6 +309,7 @@ export default function CompareModal() {
     try {
       await applyBatchDecision(ids, 'keep')
       showToast(`已全部保留 ${ids.length} 个候选`, 'success')
+      setShowCompareModal(false)
     } catch {
       showToast('批量保留失败', 'error')
     }
@@ -328,6 +329,7 @@ export default function CompareModal() {
     try {
       await crossStagePromoteCandidate(primaryCandidate.id, nextStage)
       showToast(`已晋级到阶段 ${nextStage}`, 'success')
+      setShowCompareModal(false)
     } catch {
       showToast('晋级失败', 'error')
     }
@@ -345,6 +347,7 @@ export default function CompareModal() {
         try {
           await applyBatchDecision(ids, 'discarded')
           showToast(`已淘汰 ${ids.length} 个候选`, 'info')
+          setShowCompareModal(false)
         } catch {
           showToast('批量淘汰失败', 'error')
         }
