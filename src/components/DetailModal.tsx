@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun, backtrackCandidate, updateCandidateNotes } from '../store'
+import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun, backtrackCandidate, updateCandidateNotes, submitVideoTask } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { formatImageRatio } from '../lib/size'
@@ -505,6 +505,50 @@ export default function DetailModal() {
               </div>
             </div>
           )}
+          {/* 视频任务：已完成 */}
+          {task.videoUrl && task.videoStatus === 'completed' && (
+            <div className="w-full h-full flex items-center justify-center p-4">
+              <video
+                src={task.videoUrl}
+                controls
+                className="max-w-full max-h-full rounded-lg"
+                playsInline
+                preload="metadata"
+                onError={() => showToast('视频加载失败', 'error')}
+              >
+                您的浏览器不支持视频播放
+              </video>
+            </div>
+          )}
+
+          {/* 视频任务：排队/处理中 */}
+          {task.videoStatus === 'queued' || task.videoStatus === 'processing' ? (
+            <div className="flex flex-col items-center gap-3 text-center">
+              <svg className="w-10 h-10 text-rose-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <p className="text-sm font-medium text-rose-500">
+                {task.videoStatus === 'queued' ? '视频生成排队中…' : '视频生成中…'}
+              </p>
+              {formatDuration() && (
+                <span className="text-xs text-gray-400">{formatDuration()}</span>
+              )}
+            </div>
+          ) : null}
+
+          {/* 视频任务：失败 */}
+          {task.videoStatus === 'failed' && (
+            <div className="flex flex-col items-center gap-2 text-center">
+              <svg className="w-10 h-10 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-red-500">视频生成失败</p>
+              {task.error && (
+                <p className="text-xs text-red-400 max-w-[80%] truncate">{task.error}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 右侧：信息 */}
@@ -743,6 +787,33 @@ export default function DetailModal() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
               </svg>
             </button>
+            {task.status === 'done' && task.outputImages.length > 0 && !task.videoUrl && (
+              <button
+                onClick={async () => {
+                  const imgId = task.outputImages[0]
+                  const dataUrl = getCachedImage(imgId) || await ensureImageCached(imgId)
+                  if (!dataUrl) {
+                    showToast('无法加载图片数据', 'error')
+                    return
+                  }
+                  const candidate = taskCandidate
+                  const taskId = await submitVideoTask(
+                    dataUrl,
+                    task.id,
+                    candidate?.id,
+                    task.prompt,
+                  )
+                  if (taskId) showToast('视频生成任务已提交', 'success')
+                }}
+                className="col-span-2 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition text-sm font-medium whitespace-nowrap"
+              >
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                生成视频
+              </button>
+            )}
             {!taskCandidate && task.status === 'done' && task.outputImages.length > 0 && (
               <button
                 onClick={handleAddToWorkflow}
@@ -785,6 +856,15 @@ export default function DetailModal() {
                 </svg>
                 回溯分叉
               </button>
+            )}
+            {task.videoUrl && task.videoStatus === 'completed' && (
+              <span className="col-span-2 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50/50 dark:bg-rose-500/5 text-rose-500/60 dark:text-rose-400/60 text-xs">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                视频已生成
+              </span>
             )}
           </div>
         </div>
