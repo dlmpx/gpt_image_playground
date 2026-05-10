@@ -30,6 +30,7 @@ import {
 } from './lib/db'
 import { callImageApi } from './lib/api'
 import { getFalErrorMessage, getFalQueuedImageResult } from './lib/falAiImageApi'
+import { submitFalVideoTask, getFalVideoResult, getFalVideoErrorMessage } from './lib/falAiVideoApi'
 import { getCustomQueuedImageResult } from './lib/openaiCompatibleImageApi'
 import { validateMaskMatchesImage } from './lib/canvasImage'
 import { orderInputImagesForMask } from './lib/mask'
@@ -65,8 +66,10 @@ const MAX_IMAGE_CACHE_ENTRIES = 8
 const MAX_THUMBNAIL_CACHE_ENTRIES = 80
 const MAX_THUMBNAIL_BACKFILL_CONCURRENT = 4
 const FAL_RECOVERY_POLL_MS = 10_000
+const VIDEO_RECOVERY_POLL_MS = 15_000
 const CUSTOM_RECOVERY_POLL_MS = 10_000
 const falRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const videoRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const customRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const openAIWatchdogTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const OPENAI_INTERRUPTED_ERROR = '请求中断'
@@ -953,6 +956,16 @@ export async function initStore() {
       (task.status === 'running' || task.customRecoverable)
     ) {
       scheduleCustomRecovery(task.id, 0)
+    }
+  }
+
+  // 恢复中断的视频任务
+  for (const task of tasks) {
+    if (
+      task.videoStatus === 'queued' || task.videoStatus === 'processing' ||
+      (task.status === 'error' && task.falRecoverable && task.falRequestId)
+    ) {
+      scheduleVideoRecovery(task.id, 0)
     }
   }
 
@@ -2184,6 +2197,184 @@ export function setShowCompareModal(show: boolean): void {
     useStore.setState({ showCompareModal: false, comparedCandidateIds: [] })
   } else {
     useStore.setState({ showCompareModal: true })
+  }
+}
+
+// ===== Video Task Actions =====
+
+/** 提交图生视频任务：接收来源图片 dataUrl 和候选/任务 ID，创建视频任务记录并异步执行 */
+export async function submitVideoTask(
+  sourceImageDataUrl: string,
+  sourceTaskId: string,
+  sourceCandidateId?: string,
+  prompt?: string,
+): Promise<string> {
+  const { settings, showToast } = useStore.getState()
+  const activeProfile = getActiveApiProfile(settings)
+  if (validateApiProfile(activeProfile)) {
+    showToast(`请先完善请求 API 配置：${validateApiProfile(activeProfile)}`, 'error')
+    useStore.getState().setShowSettings(true)
+    return ''
+  }
+
+  const taskId = genId()
+  const task: TaskRecord = {
+    id: taskId,
+    prompt: prompt || sourceTaskId.slice(0, 8) + ' 图生视频',
+    params: { ...DEFAULT_PARAMS },
+    apiProvider: activeProfile.provider,
+    apiProfileId: activeProfile.id,
+    apiProfileName: activeProfile.name,
+    apiModel: activeProfile.model,
+    inputImageIds: [],
+    outputImages: [],
+    videoUrl: undefined,
+    videoStatus: 'queued',
+    sourceTaskId,
+    sourceCandidateId,
+    status: 'running',
+    error: null,
+    createdAt: Date.now(),
+    finishedAt: null,
+    elapsed: null,
+  }
+
+  const latestTasks = useStore.getState().tasks
+  useStore.getState().setTasks([task, ...latestTasks])
+  await putTask(task)
+
+  // 异步执行，不等待
+  executeVideoTask(taskId, sourceImageDataUrl, prompt)
+
+  showToast('视频生成任务已提交', 'info')
+  return taskId
+}
+
+/** 执行视频生成任务：提交 FAL 视频 API → 等待结果 → 更新任务状态 */
+async function executeVideoTask(taskId: string, sourceImageDataUrl: string, prompt?: string) {
+  const { settings } = useStore.getState()
+  const task = useStore.getState().tasks.find((t) => t.id === taskId)
+  if (!task) return
+
+  const profile = getTaskApiProfile(settings, task) ?? getActiveApiProfile(settings)
+  if (!profile) {
+    updateTaskInStore(taskId, {
+      status: 'error',
+      error: '找不到此任务所使用的 API 配置。',
+      falRecoverable: false,
+      videoStatus: 'failed',
+      finishedAt: Date.now(),
+      elapsed: Date.now() - task.createdAt,
+    })
+    return
+  }
+
+  try {
+    const { requestId, endpoint } = await submitFalVideoTask(profile, sourceImageDataUrl, prompt)
+    updateTaskInStore(taskId, {
+      falRequestId: requestId,
+      falEndpoint: endpoint,
+      videoStatus: 'processing',
+    })
+
+    const { videoUrl } = await getFalVideoResult(profile, endpoint, requestId)
+
+    updateTaskInStore(taskId, {
+      videoUrl,
+      videoStatus: 'completed',
+      status: 'done',
+      finishedAt: Date.now(),
+      elapsed: Date.now() - task.createdAt,
+    })
+
+    useStore.getState().showToast('视频生成完成', 'success')
+  } catch (err) {
+    if (isFalConnectionRecoverableError(err)) {
+      const latestTask = useStore.getState().tasks.find((t) => t.id === taskId) ?? task
+      updateTaskInStore(taskId, {
+        status: 'error',
+        error: '与 fal.ai 的连接已断开，之后会继续查询视频结果。',
+        falRecoverable: true,
+        finishedAt: Date.now(),
+        elapsed: Date.now() - task.createdAt,
+      })
+      scheduleVideoRecovery(taskId)
+    } else {
+      updateTaskInStore(taskId, {
+        status: 'error',
+        error: getFalVideoErrorMessage(err) ?? (err instanceof Error ? err.message : String(err)),
+        videoStatus: 'failed',
+        falRecoverable: false,
+        finishedAt: Date.now(),
+        elapsed: Date.now() - task.createdAt,
+      })
+    }
+  }
+}
+
+// ===== Video Recovery Mechanism =====
+
+function clearVideoRecoveryTimer(taskId: string) {
+  const timer = videoRecoveryTimers.get(taskId)
+  if (timer) clearTimeout(timer)
+  videoRecoveryTimers.delete(taskId)
+}
+
+function scheduleVideoRecovery(taskId: string, delayMs = VIDEO_RECOVERY_POLL_MS) {
+  if (videoRecoveryTimers.has(taskId)) return
+  const timer = setTimeout(() => {
+    videoRecoveryTimers.delete(taskId)
+    recoverVideoTask(taskId)
+  }, delayMs)
+  videoRecoveryTimers.set(taskId, timer)
+}
+
+async function recoverVideoTask(taskId: string) {
+  const { settings, tasks } = useStore.getState()
+  const task = tasks.find((item) => item.id === taskId)
+  if (
+    !task ||
+    !task.falRequestId ||
+    !task.falEndpoint ||
+    (task.status === 'done' && task.videoStatus === 'completed')
+  ) {
+    return
+  }
+
+  const profile = getFalRecoveryProfile(settings, task)
+  if (!profile) {
+    scheduleVideoRecovery(taskId)
+    return
+  }
+
+  try {
+    const { videoUrl } = await getFalVideoResult(profile, task.falEndpoint, task.falRequestId)
+    clearVideoRecoveryTimer(taskId)
+    updateTaskInStore(taskId, {
+      videoUrl,
+      videoStatus: 'completed',
+      status: 'done',
+      error: null,
+      falRecoverable: false,
+      finishedAt: task.finishedAt ?? Date.now(),
+      elapsed: task.elapsed ?? (Date.now() - task.createdAt),
+    })
+    useStore.getState().showToast('视频任务已恢复', 'success')
+  } catch (err) {
+    if (isFalConnectionRecoverableError(err)) {
+      scheduleVideoRecovery(taskId)
+      return
+    }
+
+    clearVideoRecoveryTimer(taskId)
+    updateTaskInStore(taskId, {
+      status: 'error',
+      error: getFalVideoErrorMessage(err) ?? (err instanceof Error ? err.message : String(err)),
+      videoStatus: 'failed',
+      falRecoverable: false,
+      finishedAt: task.finishedAt ?? Date.now(),
+      elapsed: task.elapsed ?? (Date.now() - task.createdAt),
+    })
   }
 }
 
