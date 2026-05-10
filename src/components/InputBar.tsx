@@ -1,11 +1,12 @@
 import { useRef, useEffect, useCallback, useState, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useStore, submitTask, addImageFromFile, updateTaskInStore, removeMultipleTasks, getCachedImage, ensureImageCached, setShowWorkflowPanel } from '../store'
+import { useStore, submitTask, addImageFromFile, updateTaskInStore, removeMultipleTasks, getCachedImage, ensureImageCached, setShowWorkflowPanel, rollbackRun, setShowBranchTree } from '../store'
 import { DEFAULT_PARAMS } from '../types'
 import { getActiveApiProfile, normalizeSettings } from '../lib/apiProfiles'
 import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getOutputImageLimitForSettings, normalizeParamsForSettings } from '../lib/paramCompatibility'
 import { normalizeImageSize } from '../lib/size'
 import { getTemplateByStage } from '../lib/workflowTemplates'
+import type { WorkflowStage } from '../types'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import Select from './Select'
 import SizePickerModal from './SizePickerModal'
@@ -59,6 +60,8 @@ export default function InputBar() {
   const activeWorkflowRunId = useStore((s) => s.activeWorkflowRunId)
   const workflowRuns = useStore((s) => s.workflowRuns)
   const showWorkflowPanel = useStore((s) => s.showWorkflowPanel)
+  const activeCandidateId = useStore((s) => s.activeCandidateId)
+  const workflowCandidates = useStore((s) => s.workflowCandidates)
 
   const filteredTasks = useMemo(() => {
     const sorted = [...tasks].sort((a, b) => b.createdAt - a.createdAt)
@@ -1378,9 +1381,66 @@ export default function InputBar() {
                     </ul>
                   </details>
                 )}
+                {/* 活跃候选的分支信息 */}
+                {activeCandidateId && (() => {
+                  const activeCandidate = workflowCandidates.find(c => c.id === activeCandidateId)
+                  const parentCandidate = activeCandidate?.parentCandidateId
+                    ? workflowCandidates.find(c => c.id === activeCandidate.parentCandidateId)
+                    : null
+                  if (!activeCandidate) return null
+                  return (
+                    <div className="mt-1.5 pt-1.5 border-t border-purple-200/30 dark:border-purple-500/10">
+                      {parentCandidate && (
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                          分支来源：{parentCandidate.notes || parentCandidate.id.slice(-6)}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )
           })()}
+
+          {/* 分支树 + 回退按钮 */}
+          {activeWorkflowRunId && (
+            <div className="flex items-center gap-2 mb-3">
+              {/* 分支树按钮 */}
+              <button
+                onClick={() => setShowBranchTree(true)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition text-xs"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 16l4-8 4 4 4-6" />
+                </svg>
+                分支树
+              </button>
+
+              {/* 回退按钮 */}
+              <button
+                onClick={() => {
+                  const run = workflowRuns.find(r => r.id === activeWorkflowRunId)
+                  if (!run || run.currentStage <= 1) {
+                    useStore.getState().showToast('已在阶段1，无法回退', 'info')
+                    return
+                  }
+                  useStore.getState().setConfirmDialog({
+                    title: '回退工作流',
+                    message: `确定将工作流「${run.name}」回退到阶段 ${run.currentStage - 1} 吗？\n\n回退后 Run 的当前阶段将改变，您可以从此阶段重新开始。`,
+                    confirmText: '确认回退',
+                    tone: 'warning',
+                    action: () => rollbackRun(run.id, (run.currentStage - 1) as WorkflowStage),
+                  })
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition text-xs"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l-4-4m0 0l4-4m-4 4h12" />
+                </svg>
+                回退
+              </button>
+            </div>
+          )}
 
           {/* 输入框 */}
           <textarea
