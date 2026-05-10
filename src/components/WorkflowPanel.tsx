@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useStore, createWorkflowRun, setActiveWorkflowRun, removeWorkflowRun, setShowWorkflowPanel, setActiveCandidate, setShowBranchTree, ensureImageCached, getCachedImage, setComparedCandidates, setShowCompareModal, crossStagePromoteCandidate, setCandidateDecision } from '../store'
 import { getTemplateByStage } from '../lib/workflowTemplates'
 import type { WorkflowStage, WorkflowCandidate, CandidateDecision } from '../types'
+import PromotionChecklistModal from './PromotionChecklistModal'
 
 const stageNames: Record<WorkflowStage, string> = {
   1: '抽卡',
@@ -63,6 +64,14 @@ export default function WorkflowPanel() {
   const touchStartPosRef = useRef<{ x: number; y: number } | null>(null)
   const lastClickTimeRef = useRef<number>(0)
   const popoverRef = useRef<HTMLDivElement | null>(null)
+
+  // 晋级前检查清单状态
+  const [pendingPromotion, setPendingPromotion] = useState<{
+    candidateId: string
+    targetStage: WorkflowStage
+    stageName: string
+    items: string[]
+  } | null>(null)
 
   if (!showWorkflowPanel) return null
 
@@ -161,6 +170,7 @@ export default function WorkflowPanel() {
   }
 
   return (
+    <>
     <div className="fixed inset-y-0 right-0 z-40 w-full sm:w-[480px] 2xl:w-[560px] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-l border-gray-200 dark:border-white/[0.08] shadow-2xl flex flex-col overflow-hidden">
       <style>{dragStyles}</style>
       {/* Header */}
@@ -255,8 +265,20 @@ export default function WorkflowPanel() {
                     try {
                       const data = JSON.parse(e.dataTransfer.getData('text/plain'))
                       const srcStage: WorkflowStage = data.sourceStage
+                      const candidateId: string = data.candidateId
                       if (srcStage !== stage) {
-                        void crossStagePromoteCandidate(data.candidateId, stage)
+                        const template = getTemplateByStage(stage)
+                        const checklist = template?.reviewChecklist
+                        if (checklist && checklist.length > 0) {
+                          setPendingPromotion({
+                            candidateId,
+                            targetStage: stage,
+                            stageName: template?.name || `阶段${stage}`,
+                            items: checklist,
+                          })
+                        } else {
+                          void crossStagePromoteCandidate(candidateId, stage)
+                        }
                       }
                     } catch { /* 忽略无效拖拽数据 */ }
                     setIsDragging(false)
@@ -617,7 +639,18 @@ export default function WorkflowPanel() {
             colorClass: 'text-purple-500',
             action: () => {
               if (nextStage > candidate.stage) {
-                void crossStagePromoteCandidate(candidate.id, nextStage)
+                const template = getTemplateByStage(nextStage)
+                const checklist = template?.reviewChecklist
+                if (checklist && checklist.length > 0) {
+                  setPendingPromotion({
+                    candidateId: candidate.id,
+                    targetStage: nextStage,
+                    stageName: template?.name || `阶段${nextStage}`,
+                    items: checklist,
+                  })
+                } else {
+                  void crossStagePromoteCandidate(candidate.id, nextStage)
+                }
               }
               setPopoverData(null)
             },
@@ -655,5 +688,19 @@ export default function WorkflowPanel() {
         )
       })()}
     </div>
+    {pendingPromotion && (
+      <PromotionChecklistModal
+        items={pendingPromotion.items}
+        stageNumber={pendingPromotion.targetStage}
+        stageName={pendingPromotion.stageName}
+        onConfirm={async () => {
+          const { candidateId, targetStage } = pendingPromotion
+          setPendingPromotion(null)
+          await crossStagePromoteCandidate(candidateId, targetStage)
+        }}
+        onCancel={() => setPendingPromotion(null)}
+      />
+    )}
+    </>
   )
 }

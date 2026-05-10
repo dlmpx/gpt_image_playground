@@ -6,7 +6,9 @@ import { formatImageRatio } from '../lib/size'
 import { ActualValueBadge, DetailParamValue } from '../lib/paramDisplay'
 import { copyBlobToClipboard, copyTextToClipboard, getClipboardFailureMessage } from '../lib/clipboard'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
+import { getTemplateByStage } from '../lib/workflowTemplates'
 import { CloseIcon, CopyIcon, EditIcon, TrashIcon } from './icons'
+import PromotionChecklistModal from './PromotionChecklistModal'
 
 export default function DetailModal() {
   const tasks = useStore((s) => s.tasks)
@@ -34,6 +36,12 @@ export default function DetailModal() {
   const mainImageRef = useRef<HTMLImageElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const [imageLabelLeft, setImageLabelLeft] = useState(8)
+  const [pendingPromotion, setPendingPromotion] = useState<{
+    candidateId: string
+    targetStage: number
+    stageName: string
+    items: string[]
+  } | null>(null)
 
   const task = useMemo(
     () => tasks.find((t) => t.id === detailTaskId) ?? null,
@@ -293,7 +301,20 @@ export default function DetailModal() {
     const candidate = useStore.getState().workflowCandidates.find(
       (c) => c.sourceTaskId === task.id
     )
-    if (candidate) {
+    if (!candidate) return
+    const nextStage = candidate.stage + 1
+    if (nextStage > 4) return
+
+    const template = getTemplateByStage(nextStage)
+    const checklist = template?.reviewChecklist
+    if (checklist && checklist.length > 0) {
+      setPendingPromotion({
+        candidateId: candidate.id,
+        targetStage: nextStage,
+        stageName: template?.name || `阶段${nextStage}`,
+        items: checklist,
+      })
+    } else {
       await promoteCandidateToStage(candidate.id)
     }
   }
@@ -303,6 +324,7 @@ export default function DetailModal() {
   const canPromote = taskCandidate && taskCandidate.decision !== 'promoted' && taskCandidate.stage < 4
 
   return (
+    <>
     <div
       data-no-drag-select
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -714,5 +736,19 @@ export default function DetailModal() {
         </div>
       </div>
     </div>
+    {pendingPromotion && (
+      <PromotionChecklistModal
+        items={pendingPromotion.items}
+        stageNumber={pendingPromotion.targetStage}
+        stageName={pendingPromotion.stageName}
+        onConfirm={async () => {
+          const { candidateId } = pendingPromotion
+          setPendingPromotion(null)
+          await promoteCandidateToStage(candidateId)
+        }}
+        onCancel={() => setPendingPromotion(null)}
+      />
+    )}
+    </>
   )
 }
