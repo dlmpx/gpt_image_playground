@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useStore, createWorkflowRun, setActiveWorkflowRun, removeWorkflowRun, setShowWorkflowPanel, setActiveCandidate, setShowBranchTree, ensureImageCached, getCachedImage, setComparedCandidates, setShowCompareModal } from '../store'
+import { useStore, createWorkflowRun, setActiveWorkflowRun, removeWorkflowRun, setShowWorkflowPanel, setActiveCandidate, setShowBranchTree, ensureImageCached, getCachedImage, setComparedCandidates, setShowCompareModal, crossStagePromoteCandidate, setCandidateDecision } from '../store'
 import { getTemplateByStage } from '../lib/workflowTemplates'
 import type { WorkflowStage, WorkflowCandidate } from '../types'
 
@@ -50,7 +50,33 @@ export default function WorkflowPanel() {
   const [thumbnailMap, setThumbnailMap] = useState<Record<string, string | null>>({})
   const loadedIds = useRef<Set<string>>(new Set())
 
+  // 拖拽状态（D-01/D-03）
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragCandidateId, setDragCandidateId] = useState<string | null>(null)
+  const [dragSourceStage, setDragSourceStage] = useState<WorkflowStage | null>(null)
+  const [hoveredStage, setHoveredStage] = useState<WorkflowStage | null>(null)
+  const [hoveredDiscard, setHoveredDiscard] = useState(false)
+
   if (!showWorkflowPanel) return null
+
+  // 拖拽动画 CSS（D-03 颜色语义）
+  const dragStyles = `
+    @keyframes purplePulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.4); }
+      50% { box-shadow: 0 0 0 6px rgba(168, 85, 247, 0.1); }
+    }
+    @keyframes scale-in {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    @keyframes discardPulse {
+      0%, 100% { border-color: rgba(248, 113, 113, 0.4); }
+      50% { border-color: rgba(248, 113, 113, 0.9); }
+    }
+    .animate-purple-pulse { animation: purplePulse 0.6s ease-in-out infinite; }
+    .animate-scale-in { animation: scale-in 150ms ease-out; }
+    .animate-discard-pulse { animation: discardPulse 0.5s ease-in-out infinite; }
+  `
 
   const activeRun = workflowRuns.find((r) => r.id === activeWorkflowRunId) ?? null
   const runCandidates = workflowCandidates.filter((c) => c.runId === activeWorkflowRunId)
@@ -106,6 +132,7 @@ export default function WorkflowPanel() {
 
   return (
     <div className="fixed inset-y-0 right-0 z-40 w-full sm:w-[480px] 2xl:w-[560px] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-l border-gray-200 dark:border-white/[0.08] shadow-2xl flex flex-col overflow-hidden">
+      <style>{dragStyles}</style>
       {/* Header */}
       <div className="h-12 flex items-center justify-between px-4 border-b border-gray-100 dark:border-white/[0.06] flex-shrink-0">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">工作流画布</h2>
@@ -175,7 +202,39 @@ export default function WorkflowPanel() {
               return (
                 <div
                   key={stage}
-                  className="flex flex-col rounded-2xl border border-gray-100 dark:border-white/[0.06] bg-gray-50/50 dark:bg-white/[0.02] overflow-hidden min-h-[200px]"
+                  className={`flex flex-col rounded-2xl border overflow-hidden min-h-[200px] transition-all duration-200 ${
+                    hoveredStage === stage && dragSourceStage != null
+                      ? stage > dragSourceStage
+                        ? 'ring-2 ring-purple-400 bg-purple-50/50 dark:bg-purple-500/10 border-purple-400 animate-purple-pulse'
+                        : stage === dragSourceStage
+                          ? 'ring-2 ring-green-400 bg-green-50/50 dark:bg-green-500/10 border-green-400 animate-pulse'
+                          : 'ring-2 ring-red-400 bg-red-50/50 dark:bg-red-500/10 border-red-400 animate-pulse'
+                      : 'border-gray-100 dark:border-white/[0.06] bg-gray-50/50 dark:bg-white/[0.02]'
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    if (hoveredStage !== stage) setHoveredStage(stage)
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      setHoveredStage(null)
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    try {
+                      const data = JSON.parse(e.dataTransfer.getData('text/plain'))
+                      const srcStage: WorkflowStage = data.sourceStage
+                      if (srcStage !== stage) {
+                        void crossStagePromoteCandidate(data.candidateId, stage)
+                      }
+                    } catch { /* 忽略无效拖拽数据 */ }
+                    setIsDragging(false)
+                    setDragCandidateId(null)
+                    setDragSourceStage(null)
+                    setHoveredStage(null)
+                    setHoveredDiscard(false)
+                  }}
                 >
                   {/* 阶段头部 */}
                   <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-white/[0.06] flex-shrink-0">
@@ -213,9 +272,49 @@ export default function WorkflowPanel() {
                               key={candidate.id}
                               data-candidate-id={candidate.id}
                               data-stage={candidate.stage}
+                              draggable={true}
                               onClick={() => setActiveCandidate(candidate.id)}
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData(
+                                  'text/plain',
+                                  JSON.stringify({ candidateId: candidate.id, sourceStage: candidate.stage }),
+                                )
+                                e.dataTransfer.effectAllowed = 'move'
+                                // 创建拖拽缩略图
+                                const canvas = document.createElement('canvas')
+                                canvas.width = 48
+                                canvas.height = 48
+                                const ctx = canvas.getContext('2d')
+                                if (ctx) {
+                                  ctx.fillStyle = '#a855f7'
+                                  ctx.fillRect(0, 0, 48, 48)
+                                  ctx.fillStyle = '#ffffff'
+                                  ctx.font = '12px sans-serif'
+                                  ctx.textAlign = 'center'
+                                  ctx.textBaseline = 'middle'
+                                  ctx.fillText('S' + candidate.stage, 24, 24)
+                                }
+                                e.dataTransfer.setDragImage(canvas, 24, 24)
+                                setIsDragging(true)
+                                setDragCandidateId(candidate.id)
+                                setDragSourceStage(candidate.stage)
+                                setActiveCandidate(candidate.id)
+                              }}
+                              onDragEnd={() => {
+                                setIsDragging(false)
+                                setDragCandidateId(null)
+                                setDragSourceStage(null)
+                                setHoveredStage(null)
+                                setHoveredDiscard(false)
+                              }}
                               className={`relative w-full min-h-[7rem] bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-white/[0.05] hover:shadow-md hover:border-purple-200 dark:hover:border-purple-500/20 transition-all duration-200 p-1.5 cursor-pointer ${
                                 isActive ? 'ring-2 ring-purple-500 ring-offset-1 ring-offset-white dark:ring-offset-gray-800' : ''
+                              } ${
+                                isDragging && dragCandidateId === candidate.id
+                                  ? 'opacity-50 scale-95 shadow-lg shadow-purple-500/30'
+                                  : isDragging
+                                    ? 'opacity-60'
+                                    : ''
                               }`}
                             >
                               {/* 对比复选框 */}
@@ -297,6 +396,42 @@ export default function WorkflowPanel() {
           </div>
         )}
       </div>
+
+      {/* 拖拽淘汰区（D-01 底部 drop zone） */}
+      {activeRun && (
+        <div
+          className={`mx-3 mb-2 rounded-xl border-2 border-dashed py-3 text-center transition-all duration-200 ${
+            hoveredDiscard
+              ? 'bg-red-50 dark:bg-red-500/10 border-red-400 animate-discard-pulse'
+              : 'border-red-200 dark:border-red-500/20'
+          }`}
+          onDragOver={(e) => {
+            e.preventDefault()
+            if (!hoveredDiscard) setHoveredDiscard(true)
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+              setHoveredDiscard(false)
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault()
+            try {
+              const data = JSON.parse(e.dataTransfer.getData('text/plain'))
+              void setCandidateDecision(data.candidateId, 'discarded')
+            } catch { /* 忽略无效拖拽数据 */ }
+            setIsDragging(false)
+            setDragCandidateId(null)
+            setDragSourceStage(null)
+            setHoveredStage(null)
+            setHoveredDiscard(false)
+          }}
+        >
+          <span className={`text-xs transition-colors duration-200 ${hoveredDiscard ? 'text-red-500 font-medium' : 'text-red-400'}`}>
+            拖拽到此以淘汰候选
+          </span>
+        </div>
+      )}
 
       {/* Footer */}
       {(activeRun || comparedCandidateIds.length >= 1) && (
