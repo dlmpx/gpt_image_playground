@@ -1959,6 +1959,11 @@ export function setShowWorkflowPanel(show: boolean) {
   useStore.setState({ showWorkflowPanel: show })
 }
 
+/** Toggle branch tree visibility */
+export function setShowBranchTree(show: boolean) {
+  useStore.setState({ showBranchTree: show })
+}
+
 /** Delete a workflow run and all its candidates */
 export async function removeWorkflowRun(runId: string): Promise<void> {
   const state = useStore.getState()
@@ -1991,6 +1996,174 @@ export async function setCandidateDecision(
       c.id === candidateId ? updated : c,
     ),
   })
+}
+
+/** 跨阶段晋级：将候选晋级到任意目标阶段（不限于 +1） */
+export async function crossStagePromoteCandidate(candidateId: string, targetStage: WorkflowStage): Promise<void> {
+  const state = useStore.getState()
+  const candidate = state.workflowCandidates.find((c) => c.id === candidateId)
+  if (!candidate) {
+    state.showToast('未找到候选', 'error')
+    return
+  }
+  const run = state.workflowRuns.find((r) => r.id === candidate.runId)
+  if (!run) {
+    state.showToast('未找到工作流', 'error')
+    return
+  }
+  if (candidate.stage === targetStage) {
+    const updated: WorkflowCandidate = { ...candidate, decision: 'keep', updatedAt: Date.now() }
+    await putWorkflowCandidate(updated)
+    useStore.setState({
+      workflowCandidates: state.workflowCandidates.map((c) =>
+        c.id === candidateId ? updated : c,
+      ),
+    })
+    state.showToast(`候选已保留在阶段 ${targetStage}`, 'success')
+    return
+  }
+  const updatedCandidate: WorkflowCandidate = {
+    ...candidate,
+    stage: targetStage,
+    decision: 'promoted',
+    updatedAt: Date.now(),
+  }
+  await putWorkflowCandidate(updatedCandidate)
+  let updatedRun: WorkflowRun = run
+  if (targetStage > run.currentStage) {
+    updatedRun = { ...run, currentStage: targetStage, updatedAt: Date.now() }
+    await putWorkflowRun(updatedRun)
+  }
+  const primaryDataUrl = await ensureImageCached(candidate.primaryImageId)
+  if (primaryDataUrl) {
+    const existingImages = state.inputImages
+    if (!existingImages.some((img) => img.id === candidate.primaryImageId)) {
+      state.setInputImages([{ id: candidate.primaryImageId, dataUrl: primaryDataUrl }])
+    }
+  }
+  useStore.setState({
+    workflowCandidates: state.workflowCandidates.map((c) =>
+      c.id === candidateId ? updatedCandidate : c,
+    ),
+    workflowRuns: state.workflowRuns.map((r) =>
+      r.id === run.id ? updatedRun : r,
+    ),
+    activeCandidateId: candidateId,
+  })
+  state.showToast(`已晋级到阶段 ${targetStage}`, 'success')
+}
+
+/** 非破坏分叉：从指定候选创建新候选，以旧候选为 parent */
+export async function backtrackCandidate(candidateId: string, targetStage?: WorkflowStage): Promise<WorkflowCandidate> {
+  const state = useStore.getState()
+  const source = state.workflowCandidates.find((c) => c.id === candidateId)
+  if (!source) {
+    state.showToast('未找到候选', 'error')
+    throw new Error('未找到候选')
+  }
+  const id = genId()
+  const now = Date.now()
+  const newCandidate: WorkflowCandidate = {
+    id,
+    runId: source.runId,
+    stage: targetStage ?? source.stage,
+    sourceTaskId: source.sourceTaskId,
+    primaryImageId: source.primaryImageId,
+    parentCandidateId: candidateId,
+    decision: 'draft',
+    createdAt: now,
+    updatedAt: now,
+  }
+  await putWorkflowCandidate(newCandidate)
+  const primaryDataUrl = await ensureImageCached(source.primaryImageId)
+  if (primaryDataUrl) {
+    const existingImages = state.inputImages
+    if (!existingImages.some((img) => img.id === source.primaryImageId)) {
+      state.setInputImages([{ id: source.primaryImageId, dataUrl: primaryDataUrl }])
+    }
+  }
+  useStore.setState({
+    workflowCandidates: [...state.workflowCandidates, newCandidate],
+    activeCandidateId: id,
+  })
+  state.showToast('已从候选分叉，新候选待处理', 'info')
+  return newCandidate
+}
+
+/** Run 级回退：将 Run 的 currentStage 回退到目标阶段 */
+export async function rollbackRun(runId: string, targetStage: WorkflowStage): Promise<void> {
+  const state = useStore.getState()
+  const run = state.workflowRuns.find((r) => r.id === runId)
+  if (!run) {
+    state.showToast('未找到工作流', 'error')
+    return
+  }
+  if (targetStage < 1 || targetStage > 4) {
+    state.showToast('目标阶段必须为 1-4', 'error')
+    return
+  }
+  if (targetStage === run.currentStage) {
+    state.showToast('当前已在该阶段', 'info')
+    return
+  }
+  const updatedRun: WorkflowRun = {
+    ...run,
+    currentStage: targetStage,
+    activeCandidateId: null,
+    updatedAt: Date.now(),
+  }
+  await putWorkflowRun(updatedRun)
+  useStore.setState({
+    workflowRuns: state.workflowRuns.map((r) =>
+      r.id === runId ? updatedRun : r,
+    ),
+  })
+  state.showToast(`工作流已回退到阶段 ${targetStage}`, 'success')
+}
+
+/** 批量决策：对多个候选同时应用同一 decision */
+export async function applyBatchDecision(candidateIds: string[], decision: CandidateDecision): Promise<void> {
+  const state = useStore.getState()
+  if (!candidateIds.length) return
+  // 若设置为 primary，先清除同 Run 下已有 primary 的候选
+  if (decision === 'primary') {
+    const targetRunId = state.workflowCandidates.find((c) => candidateIds.includes(c.id))?.runId
+    if (targetRunId) {
+      const existingPrimaries = state.workflowCandidates.filter(
+        (c) => c.runId === targetRunId && c.decision === 'primary' && !candidateIds.includes(c.id),
+      )
+      for (const pc of existingPrimaries) {
+        const cleared: WorkflowCandidate = { ...pc, decision: 'keep', updatedAt: Date.now() }
+        await putWorkflowCandidate(cleared)
+      }
+    }
+  }
+  const updatedIds = new Set(candidateIds)
+  const now = Date.now()
+  const updatedCandidates = state.workflowCandidates.map((c) =>
+    updatedIds.has(c.id) ? { ...c, decision, updatedAt: now } : c,
+  )
+  // 批量持久化
+  for (const id of candidateIds) {
+    const candidate = updatedCandidates.find((c) => c.id === id)
+    if (candidate) await putWorkflowCandidate(candidate)
+  }
+  useStore.setState({ workflowCandidates: updatedCandidates })
+  state.showToast(`已批量更新 ${candidateIds.length} 个候选状态`, 'success')
+}
+
+/** 设置对比候选列表（运行时 UI 状态，不持久化） */
+export function setComparedCandidates(ids: string[]): void {
+  useStore.setState({ comparedCandidateIds: ids })
+}
+
+/** 设置候选对比弹窗开关（运行时 UI 状态，不持久化） */
+export function setShowCompareModal(show: boolean): void {
+  if (!show) {
+    useStore.setState({ showCompareModal: false, comparedCandidateIds: [] })
+  } else {
+    useStore.setState({ showCompareModal: true })
+  }
 }
 
 export async function addImageFromFile(file: File): Promise<void> {
