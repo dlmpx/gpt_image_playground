@@ -12,6 +12,55 @@ import Select from './Select'
 import SizePickerModal from './SizePickerModal'
 import ViewportTooltip from './ViewportTooltip'
 
+// 风险提示分类工具
+type RiskType = 'featureDrift' | 'refContamination' | 'styleConflict' | 'diversityDecay' | 'general'
+
+function classifyRisk(hint: string): RiskType {
+  if (/漂移|辨识度|面部.*变|特征.*变|侧脸|3.?4.?面/.test(hint)) return 'featureDrift'
+  if (/污染|参考|暗色调|垫图/.test(hint)) return 'refContamination'
+  if (/风格|冲突|错配|不匹配|残留/.test(hint)) return 'styleConflict'
+  if (/衰减|多样性|减少变化|过度约束/.test(hint)) return 'diversityDecay'
+  return 'general'
+}
+
+const riskMeta: Record<RiskType, { label: string; color: string; bg: string; border: string; icon: ReactNode }> = {
+  featureDrift: {
+    label: '特征漂移',
+    color: 'text-orange-600 dark:text-orange-400',
+    bg: 'bg-orange-50 dark:bg-orange-500/10',
+    border: 'border-l-orange-400',
+    icon: <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>,
+  },
+  refContamination: {
+    label: '垫图污染',
+    color: 'text-red-600 dark:text-red-400',
+    bg: 'bg-red-50 dark:bg-red-500/10',
+    border: 'border-l-red-400',
+    icon: <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  },
+  styleConflict: {
+    label: '风格冲突',
+    color: 'text-purple-600 dark:text-purple-400',
+    bg: 'bg-purple-50 dark:bg-purple-500/10',
+    border: 'border-l-purple-400',
+    icon: <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>,
+  },
+  diversityDecay: {
+    label: '多样性衰减',
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-50 dark:bg-blue-500/10',
+    border: 'border-l-blue-400',
+    icon: <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>,
+  },
+  general: {
+    label: '其他提示',
+    color: 'text-amber-600 dark:text-amber-400',
+    bg: 'bg-amber-50 dark:bg-amber-500/10',
+    border: 'border-l-amber-400',
+    icon: <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  },
+}
+
 /** 通用悬浮气泡提示 */
 function ButtonTooltip({ visible, text }: { visible: boolean; text: ReactNode }) {
   return (
@@ -206,6 +255,9 @@ export default function InputBar() {
   const qualityHintTimerRef = useRef<number | null>(null)
   const imageHintTimerRef = useRef<number | null>(null)
   const nLimitHintTimerRef = useRef<number | null>(null)
+  const [riskExpanded, setRiskExpanded] = useState(false)
+  const [riskAutoExpand, setRiskAutoExpand] = useState(false)
+  const prevStageRef = useRef<WorkflowStage | null>(null)
   const [outputCompressionInput, setOutputCompressionInput] = useState(
     params.output_compression == null ? '' : String(params.output_compression),
   )
@@ -305,6 +357,22 @@ export default function InputBar() {
       window.clearTimeout(nLimitHintTimerRef.current)
     }
   }, [])
+
+  // 阶段切换时自动展开风险横幅 5 秒
+  useEffect(() => {
+    const run = workflowRuns.find(r => r.id === activeWorkflowRunId)
+    const currentStage = run?.currentStage ?? null
+    if (prevStageRef.current !== null && currentStage !== null && currentStage !== prevStageRef.current) {
+      setRiskExpanded(true)
+      setRiskAutoExpand(true)
+      const timer = setTimeout(() => {
+        setRiskExpanded(false)
+        setRiskAutoExpand(false)
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+    prevStageRef.current = currentStage
+  }, [activeWorkflowRunId, workflowRuns])
 
   useEffect(() => {
     let cancelled = false
@@ -1371,16 +1439,58 @@ export default function InputBar() {
                     {template.advanceInstruction}
                   </p>
                 )}
-                {template?.riskHints && template.riskHints.length > 0 && (
-                  <details className="mt-1">
-                    <summary className="text-xs text-amber-500 cursor-pointer">风险提示（{template.riskHints.length}）</summary>
-                    <ul className="mt-1 pl-4 text-xs text-amber-600/70 dark:text-amber-400/60 list-disc">
-                      {template.riskHints.map((hint, i) => (
-                        <li key={i}>{hint}</li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
+                {template?.riskHints && template.riskHints.length > 0 && (() => {
+                  const grouped = template.riskHints.reduce((acc, hint) => {
+                    const type = classifyRisk(hint)
+                    if (!acc[type]) acc[type] = []
+                    acc[type].push(hint)
+                    return acc
+                  }, {} as Record<string, string[]>)
+
+                  const typeOrder: RiskType[] = ['featureDrift', 'refContamination', 'styleConflict', 'diversityDecay', 'general']
+                  const summaryText = typeOrder
+                    .filter(t => grouped[t])
+                    .map(t => `${riskMeta[t].label}(${grouped[t].length})`)
+                    .join(' · ')
+
+                  return (
+                    <div className={`mt-1.5 rounded-lg border transition-all duration-300 ${
+                      riskAutoExpand
+                        ? 'border-amber-300 dark:border-amber-500/30 bg-amber-50/80 dark:bg-amber-500/5 animate-pulse'
+                        : 'border-amber-200/50 dark:border-amber-500/10 bg-amber-50/30 dark:bg-amber-500/[0.02]'
+                    }`}>
+                      <button
+                        onClick={() => setRiskExpanded(!riskExpanded)}
+                        className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-xs"
+                      >
+                        <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-medium text-amber-600 dark:text-amber-400">风险提示</span>
+                        <span className="text-amber-500/60 dark:text-amber-400/50 ml-1">{summaryText}</span>
+                        <span className="flex-1" />
+                        <svg className={`w-3 h-3 text-amber-400 transition-transform ${riskExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {riskExpanded && (
+                        <div className="px-2.5 pb-2 space-y-1.5">
+                          {typeOrder.map(type => {
+                            const hints = grouped[type]
+                            if (!hints || hints.length === 0) return null
+                            const meta = riskMeta[type]
+                            return hints.map((hint, i) => (
+                              <div key={`${type}-${i}`} className={`flex items-start gap-1.5 pl-2 pr-1 py-1 rounded border-l-2 text-xs ${meta.bg} ${meta.border}`}>
+                                <span className={`mt-0.5 ${meta.color}`}>{meta.icon}</span>
+                                <span className={`leading-relaxed ${meta.color}`}>{hint}</span>
+                              </div>
+                            ))
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
                 {/* 活跃候选的分支信息 */}
                 {activeCandidateId && (() => {
                   const activeCandidate = workflowCandidates.find(c => c.id === activeCandidateId)
