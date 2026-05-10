@@ -1,6 +1,7 @@
-import { useStore, createWorkflowRun, setActiveWorkflowRun, removeWorkflowRun, setShowWorkflowPanel, setShowBranchTree } from '../store'
+import { useState, useEffect, useRef } from 'react'
+import { useStore, createWorkflowRun, setActiveWorkflowRun, removeWorkflowRun, setShowWorkflowPanel, setActiveCandidate, setShowBranchTree, ensureImageCached, getCachedImage, setComparedCandidates, setShowCompareModal } from '../store'
 import { getTemplateByStage } from '../lib/workflowTemplates'
-import type { WorkflowRun, WorkflowCandidate, WorkflowStage } from '../types'
+import type { WorkflowStage, WorkflowCandidate } from '../types'
 
 const stageNames: Record<WorkflowStage, string> = {
   1: '抽卡',
@@ -27,11 +28,27 @@ const decisionLabels: Record<string, string> = {
   primary: '主推',
 }
 
+const decisionDotColors: Record<string, string> = {
+  draft: 'bg-gray-300',
+  keep: 'bg-green-500',
+  promoted: 'bg-amber-500',
+  discarded: 'bg-red-400',
+  favorite: 'bg-yellow-400',
+  primary: 'bg-blue-500',
+}
+
 export default function WorkflowPanel() {
   const workflowRuns = useStore((s) => s.workflowRuns)
   const workflowCandidates = useStore((s) => s.workflowCandidates)
   const activeWorkflowRunId = useStore((s) => s.activeWorkflowRunId)
+  const activeCandidateId = useStore((s) => s.activeCandidateId)
+  const comparedCandidateIds = useStore((s) => s.comparedCandidateIds)
   const showWorkflowPanel = useStore((s) => s.showWorkflowPanel)
+  const showToast = useStore((s) => s.showToast)
+
+  // 缩略图本地缓存状态：primaryImageId → dataUrl | null（null 表示加载失败）
+  const [thumbnailMap, setThumbnailMap] = useState<Record<string, string | null>>({})
+  const loadedIds = useRef<Set<string>>(new Set())
 
   if (!showWorkflowPanel) return null
 
@@ -45,6 +62,27 @@ export default function WorkflowPanel() {
     groupedByStage.set(c.stage, list)
   }
 
+  // 异步加载候选缩略图
+  useEffect(() => {
+    if (!activeWorkflowRunId) return
+    const toLoad = runCandidates.filter(
+      (c) => c.primaryImageId && !loadedIds.current.has(c.primaryImageId),
+    )
+    if (toLoad.length === 0) return
+    for (const c of toLoad) {
+      loadedIds.current.add(c.primaryImageId)
+    }
+    void (async () => {
+      for (const c of toLoad) {
+        const dataUrl = await ensureImageCached(c.primaryImageId)
+        setThumbnailMap((prev) => ({
+          ...prev,
+          [c.primaryImageId]: dataUrl ?? null,
+        }))
+      }
+    })()
+  }, [activeWorkflowRunId, runCandidates])
+
   const handleCreateRun = async () => {
     const name = window.prompt('工作流名称：', '新角色')
     if (name) await createWorkflowRun(name)
@@ -53,6 +91,16 @@ export default function WorkflowPanel() {
   const handleDeleteRun = async (runId: string) => {
     if (window.confirm('确定删除此工作流及其所有候选？')) {
       await removeWorkflowRun(runId)
+    }
+  }
+
+  const handleToggleCompare = (candidateId: string) => {
+    if (comparedCandidateIds.includes(candidateId)) {
+      setComparedCandidates(comparedCandidateIds.filter((id) => id !== candidateId))
+    } else if (comparedCandidateIds.length >= 4) {
+      showToast('最多选择 4 个候选进行对比', 'info')
+    } else {
+      setComparedCandidates([...comparedCandidateIds, candidateId])
     }
   }
 
@@ -156,33 +204,90 @@ export default function WorkflowPanel() {
                       </p>
                     ) : (
                       <div className="grid grid-cols-2 gap-1.5">
-                        {zoneCandidates.map((candidate) => (
-                          <div
-                            key={candidate.id}
-                            data-candidate-id={candidate.id}
-                            data-stage={candidate.stage}
-                            className="w-full min-h-[7rem] bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-white/[0.05] hover:shadow-md hover:border-purple-200 dark:hover:border-purple-500/20 transition-all duration-200 p-1.5 cursor-pointer"
-                          >
-                            {/* 缩略图区域（占位） */}
-                            <div className="w-full h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-white/[0.04] flex items-center justify-center mb-1">
-                              <svg className="w-5 h-5 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
+                        {zoneCandidates.map((candidate) => {
+                          const isActive = activeCandidateId === candidate.id
+                          const isCompared = comparedCandidateIds.includes(candidate.id)
+                          const thumbnailUrl = thumbnailMap[candidate.primaryImageId]
+                          return (
+                            <div
+                              key={candidate.id}
+                              data-candidate-id={candidate.id}
+                              data-stage={candidate.stage}
+                              onClick={() => setActiveCandidate(candidate.id)}
+                              className={`relative w-full min-h-[7rem] bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-white/[0.05] hover:shadow-md hover:border-purple-200 dark:hover:border-purple-500/20 transition-all duration-200 p-1.5 cursor-pointer ${
+                                isActive ? 'ring-2 ring-purple-500 ring-offset-1 ring-offset-white dark:ring-offset-gray-800' : ''
+                              }`}
+                            >
+                              {/* 对比复选框 */}
+                              <div className="absolute top-1 right-1 z-[1]" onClick={(e) => e.stopPropagation()}>
+                                <label className="flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={isCompared}
+                                    onChange={() => handleToggleCompare(candidate.id)}
+                                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-purple-500 focus:ring-purple-500 bg-white dark:bg-gray-700 cursor-pointer"
+                                  />
+                                </label>
+                              </div>
+
+                              {/* 上部：缩略图 + 信息 */}
+                              <div className="flex gap-1.5 mb-1">
+                                {/* 缩略图 */}
+                                <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-white/[0.04] flex-shrink-0 flex items-center justify-center">
+                                  {thumbnailUrl === undefined ? (
+                                    <svg className="w-5 h-5 text-gray-300 dark:text-gray-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                  ) : thumbnailUrl === null ? (
+                                    <svg className="w-5 h-5 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.9l-3.536 3.535M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
+                                    </svg>
+                                  ) : (
+                                    <img
+                                      src={thumbnailUrl}
+                                      alt={candidate.notes || candidate.id}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                    />
+                                  )}
+                                </div>
+
+                                {/* 右侧信息 */}
+                                <div className="flex-1 min-w-0 overflow-hidden">
+                                  <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">
+                                    {candidate.notes || candidate.id.slice(-6)}
+                                  </div>
+                                  <div className="text-[9px] text-gray-400 truncate">
+                                    #{candidate.sourceTaskId.slice(-8)}
+                                  </div>
+                                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                    <span className="text-[9px] text-purple-500">
+                                      阶段{candidate.stage}
+                                    </span>
+                                    {candidate.parentCandidateId && (
+                                      <span className="text-[9px] text-amber-500">分支</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* 下部：decision 标签 */}
+                              <div className="mt-1 pt-1 border-t border-gray-50 dark:border-white/[0.03] flex items-center justify-between">
+                                <span className="flex items-center gap-1">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${decisionDotColors[candidate.decision] || 'bg-gray-300'}`} />
+                                  <span className={`text-[10px] font-medium ${decisionColors[candidate.decision] || 'text-gray-400'}`}>
+                                    {decisionLabels[candidate.decision] || candidate.decision}
+                                  </span>
+                                </span>
+                                <svg className="w-3 h-3 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="currentColor" viewBox="0 0 16 16">
+                                  <circle cx="4" cy="8" r="1.5" />
+                                  <circle cx="8" cy="8" r="1.5" />
+                                  <circle cx="12" cy="8" r="1.5" />
+                                </svg>
+                              </div>
                             </div>
-                            {/* 基本信息 */}
-                            <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">
-                              {candidate.notes || candidate.id.slice(-6)}
-                            </div>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <span className={`text-[9px] font-medium ${decisionColors[candidate.decision] || 'text-gray-400'}`}>
-                                {decisionLabels[candidate.decision] || candidate.decision}
-                              </span>
-                              <span className="text-[9px] text-purple-500">
-                                阶段{candidate.stage}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     )}
                   </div>
@@ -194,14 +299,34 @@ export default function WorkflowPanel() {
       </div>
 
       {/* Footer */}
-      {activeRun && (
-        <div className="px-3 py-2 border-t border-gray-100 dark:border-white/[0.06] flex-shrink-0">
-          <button
-            onClick={() => handleDeleteRun(activeRun.id)}
-            className="w-full text-xs py-1.5 rounded-lg text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
-          >
-            删除此工作流
-          </button>
+      {(activeRun || comparedCandidateIds.length >= 1) && (
+        <div className="px-3 py-2 border-t border-gray-100 dark:border-white/[0.06] flex-shrink-0 space-y-2">
+          {/* 对比按钮 */}
+          {comparedCandidateIds.length >= 2 && (
+            <button
+              onClick={() => setShowCompareModal(true)}
+              className="w-full text-xs py-1.5 rounded-lg bg-purple-500 hover:bg-purple-600 text-white transition font-medium"
+            >
+              对比选中 ({comparedCandidateIds.length})
+            </button>
+          )}
+          {comparedCandidateIds.length === 1 && (
+            <button
+              disabled
+              className="w-full text-xs py-1.5 rounded-lg bg-gray-200 dark:bg-white/[0.05] text-gray-400 dark:text-gray-500 cursor-not-allowed"
+            >
+              对比选中 (1) — 至少选 2 个
+            </button>
+          )}
+          {/* 删除按钮 */}
+          {activeRun && (
+            <button
+              onClick={() => handleDeleteRun(activeRun.id)}
+              className="w-full text-xs py-1.5 rounded-lg text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+            >
+              删除此工作流
+            </button>
+          )}
         </div>
       )}
     </div>
