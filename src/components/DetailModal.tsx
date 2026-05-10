@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun, backtrackCandidate } from '../store'
+import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun, backtrackCandidate, updateCandidateNotes } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { formatImageRatio } from '../lib/size'
@@ -42,6 +42,8 @@ export default function DetailModal() {
     stageName: string
     items: string[]
   } | null>(null)
+  const [editingNotes, setEditingNotes] = useState('')
+  const [notesDirty, setNotesDirty] = useState(false)
 
   const task = useMemo(
     () => tasks.find((t) => t.id === detailTaskId) ?? null,
@@ -165,6 +167,18 @@ export default function DetailModal() {
       cancelled = true
     }
   }, [maskTargetSrc, maskSrc])
+
+  // Check if this task has a workflow candidate
+  const taskCandidate = task ? workflowCandidates.find((c) => c.sourceTaskId === task.id) : undefined
+  const canPromote = taskCandidate && taskCandidate.decision !== 'promoted' && taskCandidate.stage < 4
+
+  // 当关联候选变化时同步备注本地状态
+  useEffect(() => {
+    if (taskCandidate) {
+      setEditingNotes(taskCandidate.notes || '')
+      setNotesDirty(false)
+    }
+  }, [taskCandidate?.id])
 
   if (!task) return null
 
@@ -318,10 +332,6 @@ export default function DetailModal() {
       await promoteCandidateToStage(candidate.id)
     }
   }
-
-  // Check if this task has a workflow candidate
-  const taskCandidate = workflowCandidates.find((c) => c.sourceTaskId === task.id)
-  const canPromote = taskCandidate && taskCandidate.decision !== 'promoted' && taskCandidate.stage < 4
 
   return (
     <>
@@ -649,6 +659,50 @@ export default function DetailModal() {
               {formatDuration() && <span> · 耗时 {formatDuration()}</span>}
             </div>
           </div>
+
+          {/* 候选备注编辑区 */}
+          {taskCandidate && (
+            <div className="col-span-full mt-1 mb-3">
+              <div className="flex items-center gap-1 mb-1">
+                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                <span className="text-xs text-gray-400">候选备注</span>
+                {notesDirty && (
+                  <span className="text-[10px] text-amber-500">未保存</span>
+                )}
+              </div>
+              <textarea
+                value={editingNotes}
+                onChange={(e) => {
+                  setEditingNotes(e.target.value)
+                  setNotesDirty(true)
+                }}
+                onBlur={() => {
+                  if (notesDirty && taskCandidate) {
+                    updateCandidateNotes(taskCandidate.id, editingNotes)
+                    setNotesDirty(false)
+                  }
+                }}
+                placeholder="添加判断依据、观察笔记..."
+                rows={2}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200/60 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.03] text-xs resize-none focus:outline-none focus:border-purple-300 dark:focus:border-purple-500/30 transition"
+              />
+              {notesDirty && (
+                <button
+                  onClick={() => {
+                    if (taskCandidate) {
+                      updateCandidateNotes(taskCandidate.id, editingNotes)
+                      setNotesDirty(false)
+                    }
+                  }}
+                  className="mt-1 text-[10px] text-purple-500 hover:text-purple-600 underline"
+                >
+                  保存备注
+                </button>
+              )}
+            </div>
+          )}
 
           {/* 操作按钮 */}
           <div className="grid grid-cols-5 sm:flex gap-2 pt-4 border-t border-gray-100 dark:border-white/[0.08]">
