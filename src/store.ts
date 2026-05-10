@@ -1998,6 +1998,23 @@ export async function setCandidateDecision(
   })
 }
 
+/** 更新候选备注 */
+export async function updateCandidateNotes(candidateId: string, notes: string): Promise<void> {
+  const state = useStore.getState()
+  const candidate = state.workflowCandidates.find((c) => c.id === candidateId)
+  if (!candidate) {
+    state.showToast('未找到候选', 'error')
+    return
+  }
+  const updated: WorkflowCandidate = { ...candidate, notes, updatedAt: Date.now() }
+  await putWorkflowCandidate(updated)
+  useStore.setState({
+    workflowCandidates: state.workflowCandidates.map((c) =>
+      c.id === candidateId ? updated : c,
+    ),
+  })
+}
+
 /** 跨阶段晋级：将候选晋级到任意目标阶段（不限于 +1） */
 export async function crossStagePromoteCandidate(candidateId: string, targetStage: WorkflowStage): Promise<void> {
   const state = useStore.getState()
