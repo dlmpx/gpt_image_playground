@@ -2160,8 +2160,8 @@ export async function applyBatchDecision(candidateIds: string[], decision: Candi
   const updatedIds = new Set(candidateIds)
   const now = Date.now()
   const updatedCandidates = state.workflowCandidates.map((c) => {
-    if (updatedIds.has(c.id)) return { ...c, decision, updatedAt: now }
-    if (clearedPrimaryIds.has(c.id)) return { ...c, decision: 'keep', updatedAt: now }
+    if (updatedIds.has(c.id)) return { ...c, decision, updatedAt: now } as WorkflowCandidate
+    if (clearedPrimaryIds.has(c.id)) return { ...c, decision: 'keep' as CandidateDecision, updatedAt: now } as WorkflowCandidate
     return c
   })
   // 批量持久化

@@ -576,7 +576,7 @@ describe('rollbackRun', () => {
     const run = makeRun({ id: 'run-1', currentStage: 2 })
     useStore.setState({ workflowRuns: [run] })
 
-    await rollbackRun('run-1', 5)
+    await rollbackRun('run-1', 5 as WorkflowStage)
 
     expect(useStore.getState().showToast).toHaveBeenCalledWith('目标阶段必须为 1-4', 'error')
   })
