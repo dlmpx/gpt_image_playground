@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useStore, createWorkflowRun, setActiveWorkflowRun, removeWorkflowRun, setShowWorkflowPanel, setActiveCandidate, setShowBranchTree, ensureImageCached, getCachedImage, setComparedCandidates, setShowCompareModal, crossStagePromoteCandidate, setCandidateDecision } from '../store'
 import { getTemplateByStage } from '../lib/workflowTemplates'
-import type { WorkflowStage, WorkflowCandidate } from '../types'
+import type { WorkflowStage, WorkflowCandidate, CandidateDecision } from '../types'
 
 const stageNames: Record<WorkflowStage, string> = {
   1: '抽卡',
@@ -57,6 +57,13 @@ export default function WorkflowPanel() {
   const [hoveredStage, setHoveredStage] = useState<WorkflowStage | null>(null)
   const [hoveredDiscard, setHoveredDiscard] = useState(false)
 
+  // 快捷操作浮层状态（D-02）
+  const [popoverData, setPopoverData] = useState<{ candidateId: string; x: number; y: number } | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null)
+  const lastClickTimeRef = useRef<number>(0)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
+
   if (!showWorkflowPanel) return null
 
   // 拖拽动画 CSS（D-03 颜色语义）
@@ -108,6 +115,29 @@ export default function WorkflowPanel() {
       }
     })()
   }, [activeWorkflowRunId, runCandidates])
+
+  // 浮层关闭监听（点击外部 / Escape 键）
+  useEffect(() => {
+    if (!popoverData) return
+    const handleClick = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setPopoverData(null)
+      }
+    }
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPopoverData(null)
+    }
+    // 延迟绑定以避免当前事件触发关闭
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleClick)
+      document.addEventListener('keydown', handleKey)
+    }, 0)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('click', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [popoverData])
 
   const handleCreateRun = async () => {
     const name = window.prompt('工作流名称：', '新角色')
@@ -274,7 +304,51 @@ export default function WorkflowPanel() {
                               data-stage={candidate.stage}
                               draggable={true}
                               onClick={() => setActiveCandidate(candidate.id)}
+                              onDoubleClick={(e) => {
+                                e.preventDefault()
+                                lastClickTimeRef.current = Date.now()
+                                setPopoverData({
+                                  candidateId: candidate.id,
+                                  x: e.clientX,
+                                  y: e.clientY,
+                                })
+                                setActiveCandidate(candidate.id)
+                              }}
+                              onTouchStart={(e) => {
+                                const touch = e.touches[0]
+                                touchStartPosRef.current = { x: touch.clientX, y: touch.clientY }
+                                longPressTimerRef.current = setTimeout(() => {
+                                  setPopoverData({
+                                    candidateId: candidate.id,
+                                    x: touch.clientX,
+                                    y: touch.clientY,
+                                  })
+                                  setActiveCandidate(candidate.id)
+                                }, 500)
+                              }}
+                              onTouchEnd={() => {
+                                if (longPressTimerRef.current) {
+                                  clearTimeout(longPressTimerRef.current)
+                                  longPressTimerRef.current = null
+                                }
+                              }}
+                              onTouchMove={(e) => {
+                                if (longPressTimerRef.current && touchStartPosRef.current) {
+                                  const touch = e.touches[0]
+                                  const dx = touch.clientX - touchStartPosRef.current.x
+                                  const dy = touch.clientY - touchStartPosRef.current.y
+                                  if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                                    clearTimeout(longPressTimerRef.current)
+                                    longPressTimerRef.current = null
+                                  }
+                                }
+                              }}
                               onDragStart={(e) => {
+                                // 若浮层已打开，阻止拖拽
+                                if (popoverData) {
+                                  e.preventDefault()
+                                  return
+                                }
                                 e.dataTransfer.setData(
                                   'text/plain',
                                   JSON.stringify({ candidateId: candidate.id, sourceStage: candidate.stage }),
@@ -464,6 +538,122 @@ export default function WorkflowPanel() {
           )}
         </div>
       )}
+
+      {/* 快捷操作浮层（D-02 双击/长按兜底） */}
+      {popoverData && (() => {
+        const candidate = runCandidates.find((c) => c.id === popoverData.candidateId)
+        if (!candidate) return null
+
+        // 位置自动修正，避免超出屏幕
+        const popoverWidth = 180
+        const popoverHeight = 270
+        let px = popoverData.x
+        let py = popoverData.y
+        if (px + popoverWidth > window.innerWidth) px = window.innerWidth - popoverWidth - 10
+        if (px < 0) px = 10
+        if (py + popoverHeight > window.innerHeight) py = py - popoverHeight - 10
+        if (py < 0) py = 10
+
+        const nextStage = Math.min(candidate.stage + 1, 4) as WorkflowStage
+
+        const quickActions: Array<{
+          label: string
+          decision?: CandidateDecision
+          icon: React.ReactNode
+          colorClass: string
+          action: () => void
+        }> = [
+          {
+            label: '设为草稿',
+            decision: 'draft',
+            icon: (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            ),
+            colorClass: 'text-gray-400',
+            action: () => { void setCandidateDecision(candidate.id, 'draft'); setPopoverData(null) },
+          },
+          {
+            label: '保留此候选',
+            decision: 'keep',
+            icon: (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            ),
+            colorClass: 'text-green-500',
+            action: () => { void setCandidateDecision(candidate.id, 'keep'); setPopoverData(null) },
+          },
+          {
+            label: '标记为主推',
+            decision: 'primary',
+            icon: (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+              </svg>
+            ),
+            colorClass: 'text-blue-500',
+            action: () => { void setCandidateDecision(candidate.id, 'primary'); setPopoverData(null) },
+          },
+          {
+            label: '收藏此候选',
+            decision: 'favorite',
+            icon: (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+            ),
+            colorClass: 'text-yellow-400',
+            action: () => { void setCandidateDecision(candidate.id, 'favorite'); setPopoverData(null) },
+          },
+          {
+            label: `晋级到阶段 ${nextStage}`,
+            icon: (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            ),
+            colorClass: 'text-purple-500',
+            action: () => {
+              if (nextStage > candidate.stage) {
+                void crossStagePromoteCandidate(candidate.id, nextStage)
+              }
+              setPopoverData(null)
+            },
+          },
+          {
+            label: '淘汰此候选',
+            decision: 'discarded',
+            icon: (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ),
+            colorClass: 'text-red-400',
+            action: () => { void setCandidateDecision(candidate.id, 'discarded'); setPopoverData(null) },
+          },
+        ]
+
+        return (
+          <div
+            ref={popoverRef}
+            className="fixed z-50 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-white/[0.08] p-1.5 flex flex-col gap-0.5 backdrop-blur-xl animate-scale-in"
+            style={{ top: py, left: px }}
+          >
+            {quickActions.map((act) => (
+              <button
+                key={act.label}
+                onClick={act.action}
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/[0.06] text-xs whitespace-nowrap transition ${act.colorClass}`}
+              >
+                {act.icon}
+                <span>{act.label}</span>
+              </button>
+            ))}
+          </div>
+        )
+      })()}
     </div>
   )
 }
