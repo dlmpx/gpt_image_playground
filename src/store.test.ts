@@ -2,7 +2,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PARAMS } from './types'
 import { createDefaultFalProfile, createDefaultOpenAIProfile, DEFAULT_SETTINGS, normalizeSettings } from './lib/apiProfiles'
 import type { TaskRecord } from './types'
+import type { WorkflowRun, WorkflowCandidate, WorkflowStage, CandidateDecision } from './types'
 import { editOutputs, getPersistedState, getTaskApiProfile, markInterruptedOpenAIRunningTasks, reuseConfig, submitTask, useStore } from './store'
+import {
+  createWorkflowRun,
+  promoteCandidateToStage,
+  crossStagePromoteCandidate,
+  backtrackCandidate,
+  rollbackRun,
+  applyBatchDecision,
+} from './store'
+
+vi.mock('./lib/db', async () => {
+  const actual = await vi.importActual('./lib/db')
+  return {
+    ...(actual as object),
+    putWorkflowRun: vi.fn(() => Promise.resolve()),
+    putWorkflowCandidate: vi.fn(() => Promise.resolve()),
+    deleteWorkflowRun: vi.fn(() => Promise.resolve()),
+    deleteWorkflowCandidate: vi.fn(() => Promise.resolve()),
+    getImage: vi.fn(() => Promise.resolve(null)),
+  }
+})
 
 const imageA = { id: 'image-a', dataUrl: 'data:image/png;base64,a' }
 
