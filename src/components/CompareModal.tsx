@@ -7,6 +7,7 @@ import {
   applyBatchDecision,
   crossStagePromoteCandidate,
   setShowCompareModal,
+  submitVideoTask,
 } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
@@ -149,6 +150,26 @@ function CandidateCard({ candidate, index, isFocused, imageUrl, loading, loadErr
           className="flex-1 text-xs px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 transition"
         >
           晋级
+        </button>
+        <button
+          onClick={async (e) => {
+            e.stopPropagation()
+            const dataUrl = await ensureImageCached(candidate.primaryImageId)
+            if (!dataUrl) {
+              showToast('无法加载图片数据', 'error')
+              return
+            }
+            const taskId = await submitVideoTask(
+              dataUrl,
+              candidate.sourceTaskId,
+              candidate.id,
+            )
+            if (taskId) showToast('视频生成任务已提交', 'success')
+          }}
+          className="flex-1 text-xs px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 transition whitespace-nowrap"
+          title="从此候选生成视频"
+        >
+          视频
         </button>
       </div>
     </div>
