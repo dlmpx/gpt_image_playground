@@ -256,3 +256,393 @@ describe('reused task API profile', () => {
     expect(state.showSettings).toBe(false)
   })
 })
+
+// ─── Workflow Action Helpers ───
+
+function makeRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
+  return {
+    id: 'run-1',
+    name: '测试Run',
+    currentStage: 1,
+    rootCandidateIds: [],
+    createdAt: 1000,
+    updatedAt: 1000,
+    ...overrides,
+  }
+}
+
+function makeCandidate(overrides: Partial<WorkflowCandidate> = {}): WorkflowCandidate {
+  return {
+    id: 'candidate-1',
+    runId: 'run-1',
+    stage: 1,
+    sourceTaskId: 'task-1',
+    primaryImageId: 'img-1',
+    parentCandidateId: null,
+    decision: 'draft',
+    createdAt: 1000,
+    updatedAt: 1000,
+    ...overrides,
+  }
+}
+
+// ─── createWorkflowRun ───
+
+describe('createWorkflowRun', () => {
+  beforeEach(() => {
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key' },
+      prompt: '',
+      inputImages: [],
+      params: { ...DEFAULT_PARAMS },
+      tasks: [],
+      workflowRuns: [],
+      workflowCandidates: [],
+      activeWorkflowRunId: null,
+      activeCandidateId: null,
+      showToast: vi.fn(),
+    })
+  })
+
+  it('should create a new run with name and goalStyle and set it as active', async () => {
+    const run = await createWorkflowRun('测试角色', '东方仙侠')
+
+    expect(run.name).toBe('测试角色')
+    expect(run.goalStyle).toBe('东方仙侠')
+    expect(run.currentStage).toBe(1)
+    expect(run.rootCandidateIds).toEqual([])
+    expect(run.id).toBeTruthy()
+
+    const state = useStore.getState()
+    expect(state.activeWorkflowRunId).toBe(run.id)
+    expect(state.workflowRuns).toContainEqual(run)
+    expect(state.activeCandidateId).toBeNull()
+  })
+
+  it('should leave goalStyle undefined when not provided', async () => {
+    const run = await createWorkflowRun('角色2')
+
+    expect(run.name).toBe('角色2')
+    expect(run.goalStyle).toBeUndefined()
+  })
+
+  it('should show success toast after creating run', async () => {
+    await createWorkflowRun('角色')
+
+    expect(useStore.getState().showToast).toHaveBeenCalledWith('工作流已创建', 'success')
+  })
+})
+
+// ─── promoteCandidateToStage ───
+
+describe('promoteCandidateToStage', () => {
+  beforeEach(() => {
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key' },
+      prompt: '',
+      inputImages: [],
+      params: { ...DEFAULT_PARAMS },
+      tasks: [],
+      workflowRuns: [],
+      workflowCandidates: [],
+      activeWorkflowRunId: null,
+      activeCandidateId: null,
+      showToast: vi.fn(),
+    })
+  })
+
+  it('should promote candidate to next stage and advance run', async () => {
+    const run = makeRun({ id: 'run-1', currentStage: 1 })
+    const candidate = makeCandidate({ id: 'cand-1', runId: 'run-1', stage: 1 })
+    useStore.setState({ workflowRuns: [run], workflowCandidates: [candidate] })
+
+    await promoteCandidateToStage('cand-1')
+
+    const state = useStore.getState()
+    const updated = state.workflowCandidates.find((c) => c.id === 'cand-1')!
+    expect(updated.decision).toBe('promoted')
+
+    const updatedRun = state.workflowRuns.find((r) => r.id === 'run-1')!
+    expect(updatedRun.currentStage).toBe(2)
+  })
+
+  it('should not regress run stage when run is already ahead', async () => {
+    const run = makeRun({ id: 'run-1', currentStage: 2 })
+    const candidate = makeCandidate({ id: 'cand-1', runId: 'run-1', stage: 1 })
+    useStore.setState({ workflowRuns: [run], workflowCandidates: [candidate] })
+
+    await promoteCandidateToStage('cand-1')
+
+    const updatedRun = useStore.getState().workflowRuns.find((r) => r.id === 'run-1')!
+    expect(updatedRun.currentStage).toBe(2)
+  })
+
+  it('should show error toast for missing candidate', async () => {
+    useStore.setState({ workflowRuns: [makeRun()], workflowCandidates: [] })
+
+    await promoteCandidateToStage('nonexistent')
+
+    expect(useStore.getState().showToast).toHaveBeenCalledWith('未找到候选', 'error')
+  })
+
+  it('should show info toast when candidate is already at final stage', async () => {
+    const run = makeRun({ id: 'run-1', currentStage: 4 })
+    const candidate = makeCandidate({ id: 'cand-1', runId: 'run-1', stage: 4 })
+    useStore.setState({ workflowRuns: [run], workflowCandidates: [candidate] })
+
+    await promoteCandidateToStage('cand-1')
+
+    expect(useStore.getState().showToast).toHaveBeenCalledWith('已在最终阶段', 'info')
+    const updated = useStore.getState().workflowCandidates.find((c) => c.id === 'cand-1')!
+    expect(updated.decision).toBe('draft')
+  })
+})
+
+// ─── crossStagePromoteCandidate ───
+
+describe('crossStagePromoteCandidate', () => {
+  beforeEach(() => {
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key' },
+      prompt: '',
+      inputImages: [],
+      params: { ...DEFAULT_PARAMS },
+      tasks: [],
+      workflowRuns: [],
+      workflowCandidates: [],
+      activeWorkflowRunId: null,
+      activeCandidateId: null,
+      showToast: vi.fn(),
+    })
+  })
+
+  it('should jump candidate to target stage and advance run', async () => {
+    const run = makeRun({ id: 'run-1', currentStage: 1 })
+    const candidate = makeCandidate({ id: 'cand-1', runId: 'run-1', stage: 1 })
+    useStore.setState({ workflowRuns: [run], workflowCandidates: [candidate] })
+
+    await crossStagePromoteCandidate('cand-1', 3)
+
+    const state = useStore.getState()
+    const updated = state.workflowCandidates.find((c) => c.id === 'cand-1')!
+    expect(updated.stage).toBe(3)
+    expect(updated.decision).toBe('promoted')
+
+    const updatedRun = state.workflowRuns.find((r) => r.id === 'run-1')!
+    expect(updatedRun.currentStage).toBe(3)
+  })
+
+  it('should set decision to keep when target stage equals current stage', async () => {
+    const run = makeRun({ id: 'run-1', currentStage: 2 })
+    const candidate = makeCandidate({ id: 'cand-1', runId: 'run-1', stage: 2 })
+    useStore.setState({ workflowRuns: [run], workflowCandidates: [candidate] })
+
+    await crossStagePromoteCandidate('cand-1', 2)
+
+    const state = useStore.getState()
+    const updated = state.workflowCandidates.find((c) => c.id === 'cand-1')!
+    expect(updated.decision).toBe('keep')
+    expect(updated.stage).toBe(2)
+
+    const updatedRun = state.workflowRuns.find((r) => r.id === 'run-1')!
+    expect(updatedRun.currentStage).toBe(2)
+  })
+
+  it('should show error toast for missing candidate', async () => {
+    await crossStagePromoteCandidate('nonexistent', 3)
+
+    expect(useStore.getState().showToast).toHaveBeenCalledWith('未找到候选', 'error')
+  })
+
+  it('should not regress run stage when target stage is behind current run stage', async () => {
+    const run = makeRun({ id: 'run-1', currentStage: 4 })
+    const candidate = makeCandidate({ id: 'cand-1', runId: 'run-1', stage: 1 })
+    useStore.setState({ workflowRuns: [run], workflowCandidates: [candidate] })
+
+    await crossStagePromoteCandidate('cand-1', 2)
+
+    const updatedRun = useStore.getState().workflowRuns.find((r) => r.id === 'run-1')!
+    expect(updatedRun.currentStage).toBe(4)
+  })
+})
+
+// ─── backtrackCandidate ───
+
+describe('backtrackCandidate', () => {
+  beforeEach(() => {
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key' },
+      prompt: '',
+      inputImages: [],
+      params: { ...DEFAULT_PARAMS },
+      tasks: [],
+      workflowRuns: [],
+      workflowCandidates: [],
+      activeWorkflowRunId: null,
+      activeCandidateId: null,
+      showToast: vi.fn(),
+    })
+  })
+
+  it('should create a forked candidate with parentCandidateId pointing to source', async () => {
+    const source = makeCandidate({ id: 'source-1', runId: 'run-1', stage: 2 })
+    useStore.setState({
+      workflowRuns: [makeRun({ id: 'run-1' })],
+      workflowCandidates: [source],
+    })
+
+    const result = await backtrackCandidate('source-1')
+
+    expect(result.parentCandidateId).toBe('source-1')
+    expect(result.stage).toBe(2)
+    expect(result.decision).toBe('draft')
+
+    const state = useStore.getState()
+    expect(state.workflowCandidates).toHaveLength(2)
+    expect(state.activeCandidateId).toBe(result.id)
+  })
+
+  it('should use specified targetStage for new candidate', async () => {
+    const source = makeCandidate({ id: 'source-1', runId: 'run-1', stage: 2 })
+    useStore.setState({
+      workflowRuns: [makeRun({ id: 'run-1' })],
+      workflowCandidates: [source],
+    })
+
+    const result = await backtrackCandidate('source-1', 1)
+
+    expect(result.stage).toBe(1)
+    expect(result.parentCandidateId).toBe('source-1')
+  })
+
+  it('should throw error and show error toast for missing candidate', async () => {
+    await expect(backtrackCandidate('nonexistent')).rejects.toThrow('未找到候选')
+
+    expect(useStore.getState().showToast).toHaveBeenCalledWith('未找到候选', 'error')
+  })
+})
+
+// ─── rollbackRun ───
+
+describe('rollbackRun', () => {
+  beforeEach(() => {
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key' },
+      prompt: '',
+      inputImages: [],
+      params: { ...DEFAULT_PARAMS },
+      tasks: [],
+      workflowRuns: [],
+      workflowCandidates: [],
+      activeWorkflowRunId: null,
+      activeCandidateId: null,
+      showToast: vi.fn(),
+    })
+  })
+
+  it('should rollback run to target stage and clear active candidate', async () => {
+    const run = makeRun({ id: 'run-1', currentStage: 3, activeCandidateId: 'cand-1' })
+    useStore.setState({
+      workflowRuns: [run],
+      workflowCandidates: [makeCandidate({ id: 'cand-1', runId: 'run-1' })],
+    })
+
+    await rollbackRun('run-1', 1)
+
+    const state = useStore.getState()
+    const updatedRun = state.workflowRuns.find((r) => r.id === 'run-1')!
+    expect(updatedRun.currentStage).toBe(1)
+    expect(updatedRun.activeCandidateId).toBeNull()
+  })
+
+  it('should show error toast for missing run', async () => {
+    await rollbackRun('nonexistent', 2)
+
+    expect(useStore.getState().showToast).toHaveBeenCalledWith('未找到工作流', 'error')
+  })
+
+  it('should show info toast when already at target stage', async () => {
+    const run = makeRun({ id: 'run-1', currentStage: 2 })
+    useStore.setState({ workflowRuns: [run] })
+
+    await rollbackRun('run-1', 2)
+
+    const state = useStore.getState()
+    expect(state.showToast).toHaveBeenCalledWith('当前已在该阶段', 'info')
+    expect(state.workflowRuns.find((r) => r.id === 'run-1')!.currentStage).toBe(2)
+  })
+
+  it('should show error toast for invalid target stage', async () => {
+    const run = makeRun({ id: 'run-1', currentStage: 2 })
+    useStore.setState({ workflowRuns: [run] })
+
+    await rollbackRun('run-1', 5)
+
+    expect(useStore.getState().showToast).toHaveBeenCalledWith('目标阶段必须为 1-4', 'error')
+  })
+})
+
+// ─── applyBatchDecision ───
+
+describe('applyBatchDecision', () => {
+  beforeEach(() => {
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key' },
+      prompt: '',
+      inputImages: [],
+      params: { ...DEFAULT_PARAMS },
+      tasks: [],
+      workflowRuns: [],
+      workflowCandidates: [],
+      activeWorkflowRunId: null,
+      activeCandidateId: null,
+      showToast: vi.fn(),
+    })
+  })
+
+  it('should update only specified candidates to given decision', async () => {
+    useStore.setState({
+      workflowRuns: [makeRun()],
+      workflowCandidates: [
+        makeCandidate({ id: 'cand-1', decision: 'draft' }),
+        makeCandidate({ id: 'cand-2', decision: 'draft' }),
+        makeCandidate({ id: 'cand-3', decision: 'draft' }),
+      ],
+    })
+
+    await applyBatchDecision(['cand-1', 'cand-2'], 'keep')
+
+    const state = useStore.getState()
+    expect(state.workflowCandidates.find((c) => c.id === 'cand-1')!.decision).toBe('keep')
+    expect(state.workflowCandidates.find((c) => c.id === 'cand-2')!.decision).toBe('keep')
+    expect(state.workflowCandidates.find((c) => c.id === 'cand-3')!.decision).toBe('draft')
+  })
+
+  it('should clear existing primary when setting new primary in same run', async () => {
+    useStore.setState({
+      workflowRuns: [makeRun({ id: 'run-1' })],
+      workflowCandidates: [
+        makeCandidate({ id: 'cand-1', runId: 'run-1', decision: 'draft' }),
+        makeCandidate({ id: 'cand-2', runId: 'run-1', decision: 'primary' }),
+      ],
+    })
+
+    await applyBatchDecision(['cand-1'], 'primary')
+
+    const state = useStore.getState()
+    expect(state.workflowCandidates.find((c) => c.id === 'cand-1')!.decision).toBe('primary')
+    expect(state.workflowCandidates.find((c) => c.id === 'cand-2')!.decision).toBe('keep')
+  })
+
+  it('should do nothing when candidateIds is empty', async () => {
+    useStore.setState({
+      workflowRuns: [makeRun()],
+      workflowCandidates: [makeCandidate({ id: 'cand-1', decision: 'draft' })],
+    })
+
+    await applyBatchDecision([], 'keep')
+
+    const state = useStore.getState()
+    expect(state.workflowCandidates.find((c) => c.id === 'cand-1')!.decision).toBe('draft')
+  })
+})
