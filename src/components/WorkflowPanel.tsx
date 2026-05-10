@@ -178,11 +178,11 @@ export default function WorkflowPanel() {
           </button>
           <button
             onClick={() => setShowBranchTree(true)}
-            className="p-1.5 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-500/10 text-purple-500 transition"
+            className="p-1.5 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-500 transition"
             title="分支树视图"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v16m0-8h8m4 0h4m-4 0v8m4-4h-4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 16l4-8 4 4 4-6" />
             </svg>
           </button>
           <button

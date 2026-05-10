@@ -15,6 +15,7 @@ import Toast from './components/Toast'
 import MaskEditorModal from './components/MaskEditorModal'
 import ImageContextMenu from './components/ImageContextMenu'
 import WorkflowPanel from './components/WorkflowPanel'
+import BranchTree from './components/BranchTree'
 import CompareModal from './components/CompareModal'
 
 export default function App() {
@@ -72,6 +73,7 @@ export default function App() {
       <MaskEditorModal />
       <ImageContextMenu />
       <WorkflowPanel />
+      <BranchTree />
       <CompareModal />
     </>
   )
