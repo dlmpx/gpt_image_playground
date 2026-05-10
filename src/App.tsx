@@ -15,6 +15,7 @@ import Toast from './components/Toast'
 import MaskEditorModal from './components/MaskEditorModal'
 import ImageContextMenu from './components/ImageContextMenu'
 import WorkflowPanel from './components/WorkflowPanel'
+import CompareModal from './components/CompareModal'
 
 export default function App() {
   const setSettings = useStore((s) => s.setSettings)
@@ -71,6 +72,7 @@ export default function App() {
       <MaskEditorModal />
       <ImageContextMenu />
       <WorkflowPanel />
+      <CompareModal />
     </>
   )
 }
