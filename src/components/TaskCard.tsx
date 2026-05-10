@@ -388,7 +388,7 @@ export default function TaskCard({
                     addWorkflowCandidateFromTask(task.id, 1, activeWorkflowRunId!, primaryImg)
                   }}
                   className="p-1.5 rounded-md hover:bg-purple-50 dark:hover:bg-purple-950/30 text-gray-400 hover:text-purple-500 transition"
-                  title="Add to workflow"
+                  title="纳入工作流"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

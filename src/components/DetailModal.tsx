@@ -277,17 +277,16 @@ export default function DetailModal() {
   const handleAddToWorkflow = async () => {
     const primaryImg = task.outputImages?.[0]
     if (!primaryImg) {
-      showToast('No output image to add', 'error')
+      showToast('无输出图可添加', 'error')
       return
     }
-    // If no active run, create one first
+    // 无活跃 Run 时自动创建
     let runId = useStore.getState().activeWorkflowRunId
     if (!runId) {
-      const run = await createWorkflowRun('New Character ' + new Date().toLocaleDateString())
+      const run = await createWorkflowRun('新角色 ' + new Date().toLocaleDateString())
       runId = run.id
     }
     await addWorkflowCandidateFromTask(task.id, 1, runId, primaryImg)
-    setDetailTaskId(null)
   }
 
   const handlePromoteCandidate = async () => {
@@ -296,7 +295,6 @@ export default function DetailModal() {
     )
     if (candidate) {
       await promoteCandidateToStage(candidate.id)
-      setDetailTaskId(null)
     }
   }
 
@@ -693,7 +691,7 @@ export default function DetailModal() {
             )}
             {taskCandidate && (
               <span className="col-span-2 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50/50 dark:bg-purple-500/5 text-purple-500/60 dark:text-purple-400/60 text-xs">
-                阶段{taskCandidate.stage} · {taskCandidate.decision}
+                阶段{taskCandidate.stage} · {{ draft: '草稿', keep: '保留', promoted: '已晋级', discarded: '已淘汰', favorite: '收藏', primary: '主推' }[taskCandidate.decision] || taskCandidate.decision}
               </span>
             )}
           </div>

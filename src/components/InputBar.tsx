@@ -1342,6 +1342,16 @@ export default function InputBar() {
             )
           )}
 
+          {/* Workflow panel toggle — always visible */}
+          <div className="flex items-center justify-end mb-1">
+            <button
+              onClick={() => setShowWorkflowPanel(!showWorkflowPanel)}
+              className="text-xs text-purple-400 hover:text-purple-600 dark:hover:text-purple-300 underline"
+            >
+              {showWorkflowPanel ? "收起工作流" : "工作流"}
+            </button>
+          </div>
+
           {/* Workflow stage indicator */}
           {activeWorkflowRunId && (() => {
             const run = workflowRuns.find(r => r.id === activeWorkflowRunId)
@@ -1350,14 +1360,8 @@ export default function InputBar() {
               <div className="mb-3 px-3 py-2 rounded-xl bg-purple-50/70 dark:bg-purple-500/5 border border-purple-200/50 dark:border-purple-500/10">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
-                    Stage {run?.currentStage}: {template?.name || "Unknown"}
+                   阶段 {run?.currentStage}：{template?.name || "未知"}
                   </span>
-                  <button
-                    onClick={() => setShowWorkflowPanel(!showWorkflowPanel)}
-                    className="text-xs text-purple-400 hover:text-purple-600 dark:hover:text-purple-300 underline"
-                  >
-                    {showWorkflowPanel ? "Hide panel" : "Workflow panel"}
-                  </button>
                 </div>
                 {template?.advanceInstruction && (
                   <p className="text-xs text-purple-500/70 dark:text-purple-400/60 leading-relaxed">
@@ -1366,7 +1370,7 @@ export default function InputBar() {
                 )}
                 {template?.riskHints && template.riskHints.length > 0 && (
                   <details className="mt-1">
-                    <summary className="text-xs text-amber-500 cursor-pointer">Risk hints ({template.riskHints.length})</summary>
+                    <summary className="text-xs text-amber-500 cursor-pointer">风险提示（{template.riskHints.length}）</summary>
                     <ul className="mt-1 pl-4 text-xs text-amber-600/70 dark:text-amber-400/60 list-disc">
                       {template.riskHints.map((hint, i) => (
                         <li key={i}>{hint}</li>

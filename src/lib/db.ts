@@ -1,7 +1,7 @@
 import type { TaskRecord, StoredImage, StoredImageThumbnail, WorkflowTemplate, WorkflowRun, WorkflowCandidate } from '../types'
 
 const DB_NAME = 'gpt-image-playground'
-const DB_VERSION = 3
+const DB_VERSION = 4
 const STORE_TASKS = 'tasks'
 const STORE_IMAGES = 'images'
 const STORE_THUMBNAILS = 'thumbnails'
@@ -27,6 +27,15 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_THUMBNAILS)) {
         db.createObjectStore(STORE_THUMBNAILS, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORE_WORKFLOW_TEMPLATES)) {
+        db.createObjectStore(STORE_WORKFLOW_TEMPLATES, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORE_WORKFLOW_RUNS)) {
+        db.createObjectStore(STORE_WORKFLOW_RUNS, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORE_WORKFLOW_CANDIDATES)) {
+        db.createObjectStore(STORE_WORKFLOW_CANDIDATES, { keyPath: 'id' })
       }
     }
     req.onsuccess = () => resolve(req.result)
