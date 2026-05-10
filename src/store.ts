@@ -374,6 +374,9 @@ interface AppState {
   workflowCandidates: WorkflowCandidate[]
   activeWorkflowRunId: string | null
   activeCandidateId: string | null
+  comparedCandidateIds: string[]
+  showBranchTree: boolean
+  showCompareModal: boolean
   showWorkflowPanel: boolean
 
   // Confirm dialog
@@ -566,6 +569,9 @@ export const useStore = create<AppState>()(
       workflowCandidates: [],
       activeWorkflowRunId: null,
       activeCandidateId: null,
+      comparedCandidateIds: [],
+      showBranchTree: false,
+      showCompareModal: false,
       showWorkflowPanel: false,
 
       // Confirm
@@ -1830,7 +1836,7 @@ export async function createWorkflowRun(name: string, goalStyle?: string): Promi
     activeWorkflowRunId: id,
     activeCandidateId: null,
   })
-  state.showToast('Created workflow run', 'success')
+  state.showToast('工作流已创建', 'success')
   return run
 }
 
@@ -1876,7 +1882,7 @@ export async function addWorkflowCandidateFromTask(
       })
     }
   }
-  state.showToast('Added candidate to workflow', 'success')
+  state.showToast('候选已纳入工作流', 'success')
   return candidate
 }
 
@@ -1885,17 +1891,17 @@ export async function promoteCandidateToStage(candidateId: string): Promise<void
   const state = useStore.getState()
   const candidate = state.workflowCandidates.find((c) => c.id === candidateId)
   if (!candidate) {
-    state.showToast('Candidate not found', 'error')
+    state.showToast('未找到候选', 'error')
     return
   }
   const run = state.workflowRuns.find((r) => r.id === candidate.runId)
   if (!run) {
-    state.showToast('Workflow run not found', 'error')
+    state.showToast('未找到工作流', 'error')
     return
   }
   const nextStage = (candidate.stage + 1) as WorkflowStage
   if (nextStage > 4) {
-    state.showToast('Already at final stage', 'info')
+    state.showToast('已在最终阶段', 'info')
     return
   }
   const updatedCandidate: WorkflowCandidate = {
@@ -1928,7 +1934,7 @@ export async function promoteCandidateToStage(candidateId: string): Promise<void
     activeCandidateId: candidateId,
   })
   state.showToast(
-    "Promoted to stage " + nextStage,
+    "已晋级到阶段 " + nextStage,
     'success',
   )
 }
@@ -1967,7 +1973,7 @@ export async function removeWorkflowRun(runId: string): Promise<void> {
     activeWorkflowRunId: state.activeWorkflowRunId === runId ? null : state.activeWorkflowRunId,
     activeCandidateId: null,
   })
-  state.showToast('Workflow run deleted', 'success')
+  state.showToast('工作流已删除', 'success')
 }
 
 /** Update candidate decision status */
