@@ -2143,6 +2143,7 @@ export async function applyBatchDecision(candidateIds: string[], decision: Candi
   const state = useStore.getState()
   if (!candidateIds.length) return
   // 若设置为 primary，先清除同 Run 下已有 primary 的候选
+  const clearedPrimaryIds = new Set<string>()
   if (decision === 'primary') {
     const targetRunId = state.workflowCandidates.find((c) => candidateIds.includes(c.id))?.runId
     if (targetRunId) {
@@ -2152,14 +2153,17 @@ export async function applyBatchDecision(candidateIds: string[], decision: Candi
       for (const pc of existingPrimaries) {
         const cleared: WorkflowCandidate = { ...pc, decision: 'keep', updatedAt: Date.now() }
         await putWorkflowCandidate(cleared)
+        clearedPrimaryIds.add(pc.id)
       }
     }
   }
   const updatedIds = new Set(candidateIds)
   const now = Date.now()
-  const updatedCandidates = state.workflowCandidates.map((c) =>
-    updatedIds.has(c.id) ? { ...c, decision, updatedAt: now } : c,
-  )
+  const updatedCandidates = state.workflowCandidates.map((c) => {
+    if (updatedIds.has(c.id)) return { ...c, decision, updatedAt: now }
+    if (clearedPrimaryIds.has(c.id)) return { ...c, decision: 'keep', updatedAt: now }
+    return c
+  })
   // 批量持久化
   for (const id of candidateIds) {
     const candidate = updatedCandidates.find((c) => c.id === id)
