@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useStore, createWorkflowRun, setActiveWorkflowRun, removeWorkflowRun, setShowWorkflowPanel, setActiveCandidate, setShowBranchTree, ensureImageCached, getCachedImage, setComparedCandidates, setShowCompareModal, crossStagePromoteCandidate, setCandidateDecision, updateCandidateNotes } from '../store'
 import { getTemplateByStage } from '../lib/workflowTemplates'
 import type { WorkflowStage, WorkflowCandidate, CandidateDecision } from '../types'
-import PromotionChecklistModal from './PromotionChecklistModal'
+import InlineChecklist from './InlineChecklist'
 
 const stageNames: Record<WorkflowStage, string> = {
   1: '抽卡',
@@ -311,6 +311,30 @@ export default function WorkflowPanel() {
                       {zoneCandidates.length} 候选
                     </span>
                   </div>
+                  {/* 内联检查清单（D-01: 在阶段区域顶部展开，将候选卡片向下推挤） */}
+                  {pendingPromotion && pendingPromotion.targetStage === stage && (
+                    <div className="px-2 pb-2">
+                      <InlineChecklist
+                        items={pendingPromotion.items}
+                        stageNumber={pendingPromotion.targetStage}
+                        stageName={pendingPromotion.stageName}
+                        onConfirmAll={async () => {
+                          const { candidateId, targetStage } = pendingPromotion
+                          setPendingPromotion(null)
+                          await crossStagePromoteCandidate(candidateId, targetStage)
+                        }}
+                        onConfirm={async () => {
+                          const { candidateId, targetStage } = pendingPromotion
+                          setPendingPromotion(null)
+                          await crossStagePromoteCandidate(candidateId, targetStage)
+                        }}
+                        onCancel={() => {
+                          setPendingPromotion(null)
+                          setHoveredStage(null)
+                        }}
+                      />
+                    </div>
+                  )}
                   {/* 候选卡片排列区 */}
                   <div className="flex-1 p-2 overflow-y-auto">
                     {zoneCandidates.length === 0 ? (
@@ -763,19 +787,6 @@ export default function WorkflowPanel() {
         )
       })()}
     </div>
-    {pendingPromotion && (
-      <PromotionChecklistModal
-        items={pendingPromotion.items}
-        stageNumber={pendingPromotion.targetStage}
-        stageName={pendingPromotion.stageName}
-        onConfirm={async () => {
-          const { candidateId, targetStage } = pendingPromotion
-          setPendingPromotion(null)
-          await crossStagePromoteCandidate(candidateId, targetStage)
-        }}
-        onCancel={() => setPendingPromotion(null)}
-      />
-    )}
     </>
   )
 }
