@@ -60,6 +60,9 @@ export default function WorkflowPanel() {
   const [hoveredDiscard, setHoveredDiscard] = useState(false)
   const [isShiftDrag, setIsShiftDrag] = useState(false)
   const [bouncingCandidateId, setBouncingCandidateId] = useState<string | null>(null)
+  const [collapsedDiscarded, setCollapsedDiscarded] = useState<Set<WorkflowStage>>(new Set())
+  const [collapsedStages, setCollapsedStages] = useState<Set<WorkflowStage>>(new Set())
+  const stageRefs = useRef<Map<WorkflowStage, HTMLDivElement>>(new Map())
 
   // 快捷操作浮层状态（D-02）
   const [popoverData, setPopoverData] = useState<{ candidateId: string; x: number; y: number } | null>(null)
@@ -166,6 +169,29 @@ export default function WorkflowPanel() {
     }
   }, [popoverData])
 
+  // LAYOUT: 初始化折叠状态（空阶段+淘汰默认折叠）和自动滚动
+  useEffect(() => {
+    if (!activeRun) return
+    setCollapsedDiscarded(new Set([1, 2, 3, 4]))
+    const emptyStages = ([1, 2, 3, 4] as WorkflowStage[]).filter(
+      (s) =>
+        (groupedByStage.get(s) || []).filter((c) => c.decision !== 'discarded')
+          .length === 0,
+    )
+    setCollapsedStages(new Set(emptyStages))
+  }, [activeWorkflowRunId])
+
+  useEffect(() => {
+    if (!activeRun) return
+    const currentStage = activeRun.currentStage
+    const stageEl = stageRefs.current.get(currentStage)
+    if (!stageEl) return
+    const raf = requestAnimationFrame(() => {
+      stageEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [activeRun?.currentStage])
+
   if (!showWorkflowPanel) return null
 
   const handleCreateRun = async () => {
@@ -259,9 +285,17 @@ export default function WorkflowPanel() {
             {([1, 2, 3, 4] as WorkflowStage[]).map((stage) => {
               const template = getTemplateByStage(stage)
               const zoneCandidates = groupedByStage.get(stage) || []
+              const activeCandidates = zoneCandidates.filter((c) => c.decision !== 'discarded')
+              const discardedCandidates = zoneCandidates.filter((c) => c.decision === 'discarded')
+              const isDiscardedCollapsed = collapsedDiscarded.has(stage)
+              const isStageCollapsed = collapsedStages.has(stage)
               return (
                 <div
                   key={stage}
+                  ref={(el) => {
+                    if (el) stageRefs.current.set(stage, el as HTMLDivElement)
+                    else stageRefs.current.delete(stage)
+                  }}
                   className={`flex flex-col rounded-2xl border overflow-hidden min-h-[200px] transition-all duration-200 ${
                     hoveredStage === stage && dragSourceStage != null
                       ? stage > dragSourceStage
@@ -271,6 +305,8 @@ export default function WorkflowPanel() {
                         : stage === dragSourceStage
                           ? 'ring-2 ring-green-400 bg-green-50/50 dark:bg-green-500/10 border-green-400 animate-pulse'
                           : 'ring-2 ring-red-400 bg-red-50/50 dark:bg-red-500/10 border-red-400 animate-pulse'
+                    : activeRun && stage === activeRun.currentStage
+                      ? 'ring-2 ring-amber-500 bg-amber-50/50 dark:bg-amber-500/10 border-amber-300 shadow-md shadow-amber-500/10'
                       : 'border-gray-100 dark:border-white/[0.06] bg-gray-50/50 dark:bg-white/[0.02]'
                   }`}
                   onDragOver={(e) => {
@@ -320,7 +356,17 @@ export default function WorkflowPanel() {
                   }}
                 >
                   {/* 阶段头部 */}
-                  <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-white/[0.06] flex-shrink-0">
+                  <div
+                    className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-white/[0.06] flex-shrink-0 cursor-pointer hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors"
+                    onClick={() => {
+                      setCollapsedStages((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(stage)) next.delete(stage)
+                        else next.add(stage)
+                        return next
+                      })
+                    }}
+                  >
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-purple-500 flex-shrink-0" />
                       <div className="min-w-0">
@@ -334,10 +380,28 @@ export default function WorkflowPanel() {
                         )}
                       </div>
                     </div>
-                    <span className="text-[10px] text-gray-400 flex-shrink-0 ml-2">
-                      {zoneCandidates.length} 候选
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                      <span className="text-[10px] text-gray-400">
+                        {activeCandidates.length} 候选
+                      </span>
+                      {activeCandidates.length > 0 && isStageCollapsed && (
+                        <span className="text-[9px] text-gray-400 truncate max-w-[80px]">
+                          {activeCandidates.slice(0, 2).map((c) => c.notes || '#' + c.id.slice(-4)).join(', ')}
+                          {activeCandidates.length > 2 && ` +${activeCandidates.length - 2}`}
+                        </span>
+                      )}
+                      <svg
+                        className={`w-3 h-3 text-gray-400 transition-transform duration-300 ${isStageCollapsed ? '' : 'rotate-90'}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
                   </div>
+                  {/* 阶段内容折叠容器（LAYOUT-02: CSS transition max-height + opacity） */}
+                  <div
+                    className={`overflow-hidden transition-all duration-300 ease-in-out ${isStageCollapsed ? 'max-h-0 opacity-0' : 'max-h-[2000px] opacity-100'}`}
+                  >
                   {/* 内联检查清单（D-01: 在阶段区域顶部展开，将候选卡片向下推挤） */}
                   {pendingPromotion && pendingPromotion.targetStage === stage && (
                     <div className="px-2 pb-2">
@@ -370,7 +434,7 @@ export default function WorkflowPanel() {
                       </p>
                     ) : (
                       <div className="grid grid-cols-2 gap-1.5">
-                        {zoneCandidates.map((candidate) => {
+                        {activeCandidates.map((candidate) => {
                           const isActive = activeCandidateId === candidate.id
                           const isCompared = comparedCandidateIds.includes(candidate.id)
                           const thumbnailUrl = thumbnailMap[candidate.primaryImageId]
@@ -629,6 +693,134 @@ export default function WorkflowPanel() {
                       </div>
                     )}
                   </div>
+                  {/* LAYOUT-01: 已淘汰候选折叠区 */}
+                  {discardedCandidates.length > 0 && (
+                    <div className="border-t border-gray-100 dark:border-white/[0.06]">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setCollapsedDiscarded((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(stage)) next.delete(stage)
+                            else next.add(stage)
+                            return next
+                          })
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] text-red-400 hover:bg-red-50/50 dark:hover:bg-red-500/5 transition-colors"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <svg
+                            className={`w-3 h-3 transition-transform duration-300 ${isDiscardedCollapsed ? '' : 'rotate-90'}`}
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                          已淘汰 ({discardedCandidates.length})
+                        </span>
+                      </button>
+                      <div
+                        className={`overflow-hidden transition-all duration-300 ease-in-out ${isDiscardedCollapsed ? 'max-h-0 opacity-0' : 'max-h-[500px] opacity-100'}`}
+                      >
+                        <div className="grid grid-cols-2 gap-1.5 px-2 pb-2">
+                          {discardedCandidates.map((candidate) => {
+                            const isActive = activeCandidateId === candidate.id
+                            const isCompared = comparedCandidateIds.includes(candidate.id)
+                            const thumbnailUrl = thumbnailMap[candidate.primaryImageId]
+                            return (
+                              <div
+                                key={candidate.id}
+                                data-candidate-id={candidate.id}
+                                data-stage={candidate.stage}
+                                draggable={true}
+                                onClick={(e) => {
+                                  const thumbnailEl = e.currentTarget.querySelector('[data-thumbnail-area]')
+                                  if (thumbnailEl && thumbnailEl.contains(e.target as Node)) {
+                                    setDetailTaskId(candidate.sourceTaskId)
+                                  } else {
+                                    setActiveCandidate(candidate.id)
+                                  }
+                                }}
+                                onDoubleClick={(e) => {
+                                  e.preventDefault()
+                                  lastClickTimeRef.current = Date.now()
+                                  setPopoverData({ candidateId: candidate.id, x: e.clientX, y: e.clientY })
+                                  setActiveCandidate(candidate.id)
+                                }}
+                                onDragStart={(e) => {
+                                  if (popoverData) { e.preventDefault(); return }
+                                  e.dataTransfer.setData('text/plain', JSON.stringify({ candidateId: candidate.id, sourceStage: candidate.stage }))
+                                  e.dataTransfer.effectAllowed = 'move'
+                                  setIsDragging(true)
+                                  setDragCandidateId(candidate.id)
+                                  setDragSourceStage(candidate.stage)
+                                  setActiveCandidate(candidate.id)
+                                }}
+                                onDragEnd={() => {
+                                  if (!dragCompletedRef.current) {
+                                    setBouncingCandidateId(candidate.id)
+                                    setTimeout(() => setBouncingCandidateId(null), 250)
+                                  }
+                                  dragCompletedRef.current = false
+                                  setIsDragging(false)
+                                  setDragCandidateId(null)
+                                  setDragSourceStage(null)
+                                  setHoveredStage(null)
+                                  setHoveredDiscard(false)
+                                  setIsShiftDrag(false)
+                                }}
+                                className={`relative w-full min-h-[7rem] bg-white/50 dark:bg-gray-800/50 rounded-xl border border-red-100 dark:border-red-500/10 hover:shadow-md transition-all duration-200 p-1.5 cursor-pointer opacity-60 hover:opacity-90 ${isActive ? 'ring-2 ring-purple-500 ring-offset-1' : ''} ${bouncingCandidateId === candidate.id ? 'animate-bounce-back' : isDragging && dragCandidateId === candidate.id ? 'opacity-50 scale-95' : ''}`}
+                              >
+                                <div className="absolute top-1 right-1 z-[1]" onClick={(e) => e.stopPropagation()}>
+                                  <label className="flex items-center cursor-pointer">
+                                    <input type="checkbox" checked={isCompared} onChange={() => {
+                                      if (comparedCandidateIds.includes(candidate.id)) {
+                                        setComparedCandidates(comparedCandidateIds.filter((id) => id !== candidate.id))
+                                      } else if (comparedCandidateIds.length >= 4) {
+                                        showToast('最多选择 4 个候选进行对比', 'info')
+                                      } else {
+                                        setComparedCandidates([...comparedCandidateIds, candidate.id])
+                                      }
+                                    }} className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-purple-500 focus:ring-purple-500 bg-white dark:bg-gray-700 cursor-pointer" />
+                                  </label>
+                                </div>
+                                <div className="flex gap-1.5 mb-1">
+                                  <div data-thumbnail-area className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-white/[0.04] flex-shrink-0 flex items-center justify-center">
+                                    <button onClick={(e) => { e.stopPropagation(); setDetailTaskId(candidate.sourceTaskId) }} title="查看详情" className="absolute top-0.5 right-0.5 z-[2] w-5 h-5 rounded-full bg-black/30 dark:bg-white/20 text-white/80 hover:text-white hover:bg-black/50 dark:hover:bg-white/30 flex items-center justify-center transition-all duration-150 opacity-70 hover:opacity-100">
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    </button>
+                                    {thumbnailUrl === undefined ? (
+                                      <svg className="w-5 h-5 text-gray-300 dark:text-gray-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                    ) : thumbnailUrl === null ? (
+                                      <svg className="w-5 h-5 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.9l-3.536 3.535M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                                    ) : (
+                                      <img src={thumbnailUrl} alt={candidate.notes || candidate.id} className="w-full h-full object-cover" loading="lazy" />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0 overflow-hidden">
+                                    <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{candidate.notes || candidate.id.slice(-6)}</div>
+                                    <div className="text-[9px] text-gray-400 truncate">#{candidate.sourceTaskId.slice(-8)}</div>
+                                    <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                      <span className="text-[9px] text-purple-500">阶段{candidate.stage}</span>
+                                      {candidate.parentCandidateId && <span className="text-[9px] text-amber-500">分支</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="mt-1 pt-1 border-t border-gray-50 dark:border-white/[0.03] flex items-center justify-between">
+                                  <span className="flex items-center gap-1">
+                                    <span className={`w-1.5 h-1.5 rounded-full ${decisionDotColors[candidate.decision] || 'bg-gray-300'}`} />
+                                    <span className={`text-[10px] font-medium ${decisionColors[candidate.decision] || 'text-gray-400'}`}>{decisionLabels[candidate.decision] || candidate.decision}</span>
+                                  </span>
+                                  <svg className="w-3 h-3 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="currentColor" viewBox="0 0 16 16"><circle cx="4" cy="8" r="1.5" /><circle cx="8" cy="8" r="1.5" /><circle cx="12" cy="8" r="1.5" /></svg>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {/* 阶段内容折叠容器结束 */}
+                  </div>
                 </div>
               )
             })}
@@ -639,10 +831,10 @@ export default function WorkflowPanel() {
       {/* 拖拽淘汰区（D-01 底部 drop zone） */}
       {activeRun && (
         <div
-          className={`mx-3 mb-2 rounded-xl border-2 border-dashed py-3 text-center transition-all duration-200 ${
+          className={`sticky bottom-0 z-10 mx-3 mb-0 rounded-xl border-2 border-dashed py-3 text-center transition-all duration-200 backdrop-blur-sm ${
             hoveredDiscard
-              ? 'bg-red-50 dark:bg-red-500/10 border-red-400 animate-discard-pulse'
-              : 'border-red-200 dark:border-red-500/20'
+              ? 'bg-red-50/95 dark:bg-red-500/10 border-red-400 animate-discard-pulse'
+              : 'bg-white/90 dark:bg-gray-900/90 border-red-200 dark:border-red-500/20'
           }`}
           onDragOver={(e) => {
             e.preventDefault()
