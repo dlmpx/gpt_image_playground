@@ -46,6 +46,7 @@ export default function WorkflowPanel() {
   const comparedCandidateIds = useStore((s) => s.comparedCandidateIds)
   const showWorkflowPanel = useStore((s) => s.showWorkflowPanel)
   const showToast = useStore((s) => s.showToast)
+  const setDetailTaskId = useStore((s) => s.setDetailTaskId)
 
   // 缩略图本地缓存状态：primaryImageId → dataUrl | null（null 表示加载失败）
   const [thumbnailMap, setThumbnailMap] = useState<Record<string, string | null>>({})
@@ -353,7 +354,14 @@ export default function WorkflowPanel() {
                               data-candidate-id={candidate.id}
                               data-stage={candidate.stage}
                               draggable={true}
-                              onClick={() => setActiveCandidate(candidate.id)}
+                              onClick={(e) => {
+                                const thumbnailEl = e.currentTarget.querySelector('[data-thumbnail-area]')
+                                if (thumbnailEl && thumbnailEl.contains(e.target as Node)) {
+                                  setDetailTaskId(candidate.sourceTaskId)
+                                } else {
+                                  setActiveCandidate(candidate.id)
+                                }
+                              }}
                               onDoubleClick={(e) => {
                                 e.preventDefault()
                                 lastClickTimeRef.current = Date.now()
@@ -456,7 +464,23 @@ export default function WorkflowPanel() {
                               {/* 上部：缩略图 + 信息 */}
                               <div className="flex gap-1.5 mb-1">
                                 {/* 缩略图 */}
-                                <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-white/[0.04] flex-shrink-0 flex items-center justify-center">
+                                <div
+                                  data-thumbnail-area
+                                  className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-white/[0.04] flex-shrink-0 flex items-center justify-center"
+                                >
+                                  {/* 详情入口按钮（D-06: 缩略图右上角始终可见，D-07: 半透明小图标不依赖 hover） */}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setDetailTaskId(candidate.sourceTaskId)
+                                    }}
+                                    title="查看详情"
+                                    className="absolute top-0.5 right-0.5 z-[2] w-5 h-5 rounded-full bg-black/30 dark:bg-white/20 text-white/80 hover:text-white hover:bg-black/50 dark:hover:bg-white/30 flex items-center justify-center transition-all duration-150 opacity-70 hover:opacity-100"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  </button>
                                   {thumbnailUrl === undefined ? (
                                     <svg className="w-5 h-5 text-gray-300 dark:text-gray-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
