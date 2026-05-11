@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { normalizeBaseUrl } from '../lib/api'
 import { isApiProxyAvailable, readClientDevProxyConfig } from '../lib/devProxy'
 import { useStore, exportData, importData, clearData } from '../store'
+import type { ExportProgress } from '../store'
 import {
   createDefaultOpenAIProfile,
   DEFAULT_FAL_BASE_URL,
@@ -254,6 +255,9 @@ export default function SettingsModal() {
   const [importTasks, setImportTasks] = useState(true)
   const [clearConfig, setClearConfig] = useState(true)
   const [clearTasks, setClearTasks] = useState(true)
+  const [exporting, setExporting] = useState(false)
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null)
+  const [exportSelectedOnly, setExportSelectedOnly] = useState(false)
 
   const apiProxyAvailable = isApiProxyAvailable(readClientDevProxyConfig())
   const activeProfile = draft.profiles.find((profile) => profile.id === draft.activeProfileId) ?? draft.profiles[0] ?? getActiveApiProfile(draft)
@@ -682,6 +686,31 @@ export default function SettingsModal() {
       }
     }
   }
+
+  const progressPercent = exportProgress
+    ? (() => {
+        const { phase, current, total } = exportProgress
+        if (phase === 'tasks') return 3
+        if (phase === 'images') return total > 0 ? 5 + Math.round((current / total) * 85) : 8
+        if (phase === 'manifest') return 92
+        if (phase === 'compress') return 96
+        if (phase === 'download') return 99
+        return 0
+      })()
+    : 0
+
+  const exportPhaseText = exportProgress
+    ? (() => {
+        switch (exportProgress.phase) {
+          case 'tasks': return '正在读取任务记录…'
+          case 'images': return '正在处理图片'
+          case 'manifest': return '正在生成清单…'
+          case 'compress': return '正在压缩打包…'
+          case 'download': return '正在准备下载…'
+          default: return ''
+        }
+      })()
+    : ''
 
   return (
         <div data-no-drag-select className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1197,14 +1226,52 @@ export default function SettingsModal() {
                       </div>
                       <span className="text-[13px] font-medium text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">包含任务和图片</span>
                     </label>
+                    <label className={`flex items-center gap-2 cursor-pointer group ${!exportTasks ? 'opacity-40 pointer-events-none' : ''}`}>
+                      <div className="relative flex items-center justify-center">
+                        <input type="checkbox" checked={exportSelectedOnly} onChange={(e) => setExportSelectedOnly(e.target.checked)} disabled={!exportTasks} className="peer appearance-none w-4 h-4 rounded-[4px] border border-gray-300 bg-white checked:bg-blue-500 checked:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-1 focus:ring-offset-white dark:border-white/15 dark:bg-white/5 dark:focus:ring-offset-gray-900 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" />
+                        <svg className="absolute w-2.5 h-2.5 pointer-events-none opacity-0 peer-checked:opacity-100 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <span className="text-[13px] font-medium text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">只导出勾选项目</span>
+                    </label>
                   </div>
                   <button
-                    onClick={() => exportData({ exportConfig, exportTasks })}
-                    disabled={!exportConfig && !exportTasks}
+                    onClick={async () => {
+                      setExporting(true)
+                      setExportProgress({ phase: 'tasks', current: 0, total: 0 })
+                      await exportData({
+                        exportConfig,
+                        exportTasks,
+                        selectedOnly: exportSelectedOnly,
+                        onProgress: (p) => setExportProgress(p),
+                      })
+                      setTimeout(() => {
+                        setExporting(false)
+                        setExportProgress(null)
+                      }, 600)
+                    }}
+                    disabled={(!exportConfig && !exportTasks) || exporting}
                     className="w-full rounded-xl bg-gray-100/80 px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-200 hover:text-gray-900 disabled:opacity-50 disabled:hover:bg-gray-100/80 disabled:hover:text-gray-700 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.1] dark:hover:text-white dark:disabled:hover:bg-white/[0.06] dark:disabled:hover:text-gray-300 flex items-center justify-center gap-2"
                   >
-                    导出所选数据
+                    {exporting ? '正在导出…' : '导出所选数据'}
                   </button>
+                  {exporting && exportProgress && (
+                    <div className="space-y-1.5">
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-white/10">
+                        <div
+                          className="h-full rounded-full bg-blue-500 transition-all duration-300 ease-out"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                        <span>{exportPhaseText}</span>
+                        {exportProgress.phase === 'images' && exportProgress.total > 0 && (
+                          <span className="tabular-nums">{exportProgress.current} / {exportProgress.total} 张</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] space-y-4 shadow-sm">

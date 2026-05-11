@@ -51,7 +51,7 @@ import {
   deleteWorkflowRun,
   deleteWorkflowCandidate,
 } from './lib/db'
-import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
+import { zip, zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
 
 // ===== Image cache =====
 // 内存缓存，id → dataUrl。只保留少量最近使用图片，避免大量 4K data URL 常驻内存。
@@ -928,11 +928,10 @@ async function recoverFalTask(taskId: string) {
 /** 初始化：从 IndexedDB 加载任务，按需恢复输入图片，并清理孤立图片 */
 export async function initStore() {
   const storedTasks = await getAllTasks()
-  const { tasks, interruptedTasks } = markInterruptedOpenAIRunningTasks(storedTasks)
 
-  // 迁移：旧 isFavorite → rating
+  // 迁移：旧 isFavorite → rating: 5
   let migratedCount = 0
-  const migratedTasks = tasks.map((task) => {
+  const tasksWithRating = storedTasks.map((task) => {
     const legacy = task as TaskRecord & { isFavorite?: boolean }
     if (legacy.isFavorite && !task.rating) {
       migratedCount++
@@ -941,14 +940,19 @@ export async function initStore() {
     return task
   })
   if (migratedCount > 0) {
-    await Promise.all(migratedTasks.filter((t) => {
-      const legacy = t as TaskRecord & { isFavorite?: boolean }
-      return legacy.isFavorite && !(tasks.find((orig) => orig.id === t.id)?.rating)
-    }).map((t) => putTask(t)))
+    await Promise.all(
+      tasksWithRating
+        .filter((t) => {
+          const legacy = t as TaskRecord & { isFavorite?: boolean }
+          return legacy.isFavorite && t.rating === 5
+        })
+        .map((t) => putTask(t)),
+    )
   }
 
+  const { tasks, interruptedTasks } = markInterruptedOpenAIRunningTasks(tasksWithRating)
   await Promise.all(interruptedTasks.map((task) => putTask(task)))
-  useStore.getState().setTasks(migratedTasks)
+  useStore.getState().setTasks(tasks)
   // load workflow data
   try {
     const storedRuns = await getAllWorkflowRuns()
@@ -1673,16 +1677,32 @@ function formatExportFileTime(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`
 }
 
+/** 导出进度 */
+export interface ExportProgress {
+  phase: 'tasks' | 'images' | 'manifest' | 'compress' | 'download' | 'done'
+  current: number
+  total: number
+}
+
 /** 导出选项 */
 export interface ExportOptions {
   exportConfig?: boolean
   exportTasks?: boolean
+  selectedOnly?: boolean
+  onProgress?: (progress: ExportProgress) => void
 }
 
 /** 导出数据为 ZIP */
 export async function exportData(options: ExportOptions = { exportConfig: true, exportTasks: true }) {
+  const { onProgress } = options
   try {
-    const tasks = options.exportTasks ? await getAllTasks() : []
+    onProgress?.({ phase: 'tasks', current: 0, total: 0 })
+    let tasks = options.exportTasks ? await getAllTasks() : []
+    if (options.selectedOnly && tasks.length > 0) {
+      const selectedIds = new Set(useStore.getState().selectedTaskIds)
+      tasks = tasks.filter((t) => selectedIds.has(t.id))
+    }
+    onProgress?.({ phase: 'tasks', current: 1, total: 1 })
     const { settings } = useStore.getState()
     const exportedAt = Date.now()
     const imageCreatedAtFallback = new Map<string, number>()
@@ -1707,7 +1727,21 @@ export async function exportData(options: ExportOptions = { exportConfig: true, 
     const zipFiles: Record<string, Uint8Array | [Uint8Array, { mtime: Date }]> = {}
 
     if (options.exportTasks) {
-      const allImageIds = await getAllImageIds()
+      let allImageIds: string[]
+      if (options.selectedOnly) {
+        const idSet = new Set<string>()
+        for (const task of tasks) {
+          for (const id of task.outputImages || []) idSet.add(id)
+          for (const id of task.inputImageIds || []) idSet.add(id)
+          if (task.maskImageId) idSet.add(task.maskImageId)
+        }
+        allImageIds = Array.from(idSet)
+      } else {
+        allImageIds = await getAllImageIds()
+      }
+      const totalImages = allImageIds.length
+      let processedImages = 0
+      onProgress?.({ phase: 'images', current: 0, total: totalImages })
       const BATCH_SIZE = 30
 
       for (let i = 0; i < allImageIds.length; i += BATCH_SIZE) {
@@ -1747,11 +1781,14 @@ export async function exportData(options: ExportOptions = { exportConfig: true, 
               thumbnailVersion: thumbnail.thumbnailVersion,
             })
           }
+          processedImages++
         }
+        onProgress?.({ phase: 'images', current: processedImages, total: totalImages })
         // 每批处理完毕后释放引用，让 GC 可以回收 dataUrl 字符串
       }
     }
 
+    onProgress?.({ phase: 'manifest', current: 0, total: 0 })
     const manifest: ExportData = {
       version: 3,
       exportedAt: new Date(exportedAt).toISOString(),
@@ -1766,7 +1803,15 @@ export async function exportData(options: ExportOptions = { exportConfig: true, 
 
     zipFiles['manifest.json'] = [strToU8(JSON.stringify(manifest, null, 2)), { mtime: new Date(exportedAt) }]
 
-    const zipped = zipSync(zipFiles, { level: 6 })
+    onProgress?.({ phase: 'compress', current: 0, total: 0 })
+    await new Promise((r) => requestAnimationFrame(r))
+    const zipped = await new Promise<Uint8Array>((resolve, reject) => {
+      zip(zipFiles, { level: 6 }, (err, data) => {
+        if (err) reject(err)
+        else resolve(data)
+      })
+    })
+    onProgress?.({ phase: 'download', current: 0, total: 0 })
     const blob = new Blob([zipped.buffer as ArrayBuffer], { type: 'application/zip' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1774,8 +1819,10 @@ export async function exportData(options: ExportOptions = { exportConfig: true, 
     a.download = `gpt-image-playground-${formatExportFileTime(new Date(exportedAt))}.zip`
     a.click()
     URL.revokeObjectURL(url)
+    onProgress?.({ phase: 'done', current: 1, total: 1 })
     useStore.getState().showToast('数据已导出', 'success')
   } catch (e) {
+    onProgress?.({ phase: 'done', current: 0, total: 0 })
     useStore
       .getState()
       .showToast(
