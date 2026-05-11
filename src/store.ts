@@ -21,7 +21,7 @@ import {
   getImageThumbnail,
   getStoredFreshImageThumbnail,
   getAllImageIds,
-  getAllImages,
+  getImagesBatch,
   putImage,
   putImageThumbnail,
   deleteImage,
@@ -348,8 +348,8 @@ interface AppState {
   setSearchQuery: (q: string) => void
   filterStatus: 'all' | 'running' | 'done' | 'error'
   setFilterStatus: (status: AppState['filterStatus']) => void
-  filterFavorite: boolean
-  setFilterFavorite: (f: boolean) => void
+  filterRating: number | null
+  setFilterRating: (r: number | null) => void
 
   // 多选
   selectedTaskIds: string[]
@@ -526,8 +526,8 @@ export const useStore = create<AppState>()(
       setSearchQuery: (searchQuery) => set({ searchQuery }),
       filterStatus: 'all',
       setFilterStatus: (filterStatus) => set({ filterStatus }),
-      filterFavorite: false,
-      setFilterFavorite: (filterFavorite) => set({ filterFavorite }),
+      filterRating: null,
+      setFilterRating: (filterRating) => set({ filterRating }),
 
       // Selection
       selectedTaskIds: [],
@@ -929,8 +929,26 @@ async function recoverFalTask(taskId: string) {
 export async function initStore() {
   const storedTasks = await getAllTasks()
   const { tasks, interruptedTasks } = markInterruptedOpenAIRunningTasks(storedTasks)
+
+  // 迁移：旧 isFavorite → rating
+  let migratedCount = 0
+  const migratedTasks = tasks.map((task) => {
+    const legacy = task as TaskRecord & { isFavorite?: boolean }
+    if (legacy.isFavorite && !task.rating) {
+      migratedCount++
+      return { ...task, rating: 5 }
+    }
+    return task
+  })
+  if (migratedCount > 0) {
+    await Promise.all(migratedTasks.filter((t) => {
+      const legacy = t as TaskRecord & { isFavorite?: boolean }
+      return legacy.isFavorite && !(tasks.find((orig) => orig.id === t.id)?.rating)
+    }).map((t) => putTask(t)))
+  }
+
   await Promise.all(interruptedTasks.map((task) => putTask(task)))
-  useStore.getState().setTasks(tasks)
+  useStore.getState().setTasks(migratedTasks)
   // load workflow data
   try {
     const storedRuns = await getAllWorkflowRuns()
@@ -1321,6 +1339,29 @@ export function updateTaskInStore(taskId: string, patch: Partial<TaskRecord>) {
   if (task) putTask(task)
 }
 
+/** 评分单条任务 */
+export function rateTask(taskId: string, rating: number | null) {
+  updateTaskInStore(taskId, { rating: rating ?? undefined })
+  const { showToast } = useStore.getState()
+  if (rating) {
+    showToast(`已评 ${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}`, 'success')
+  }
+}
+
+/** 批量评分选中任务 */
+export function rateSelectedTasks(rating: number | null) {
+  const { selectedTaskIds, showToast } = useStore.getState()
+  if (!selectedTaskIds.length) return
+  for (const id of selectedTaskIds) {
+    updateTaskInStore(id, { rating: rating ?? undefined })
+  }
+  if (rating) {
+    showToast(`已为 ${selectedTaskIds.length} 条记录评 ${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}`, 'success')
+  } else {
+    showToast(`已取消 ${selectedTaskIds.length} 条记录的评分`, 'info')
+  }
+}
+
 /** 重试失败的任务：创建新任务并执行 */
 export async function retryTask(task: TaskRecord) {
   const { settings } = useStore.getState()
@@ -1642,7 +1683,6 @@ export interface ExportOptions {
 export async function exportData(options: ExportOptions = { exportConfig: true, exportTasks: true }) {
   try {
     const tasks = options.exportTasks ? await getAllTasks() : []
-    const images = options.exportTasks ? await getAllImages() : []
     const { settings } = useStore.getState()
     const exportedAt = Date.now()
     const imageCreatedAtFallback = new Map<string, number>()
@@ -1667,39 +1707,48 @@ export async function exportData(options: ExportOptions = { exportConfig: true, 
     const zipFiles: Record<string, Uint8Array | [Uint8Array, { mtime: Date }]> = {}
 
     if (options.exportTasks) {
-      for (const img of images) {
-        const { ext, bytes } = dataUrlToBytes(img.dataUrl)
-        const path = `images/${img.id}.${ext}`
-        const createdAt = img.createdAt ?? imageCreatedAtFallback.get(img.id) ?? exportedAt
-        imageFiles[img.id] = {
-          path,
-          createdAt,
-          source: img.source,
-          width: img.width,
-          height: img.height,
-        }
-        zipFiles[path] = [bytes, { mtime: new Date(createdAt) }]
+      const allImageIds = await getAllImageIds()
+      const BATCH_SIZE = 30
 
-        const thumbnail = await getImageThumbnail(img.id)
-        if (thumbnail?.thumbnailDataUrl) {
-          const { ext: thumbnailExt, bytes: thumbnailBytes } = dataUrlToBytes(thumbnail.thumbnailDataUrl)
-          const thumbnailPath = `thumbnails/${img.id}.${thumbnailExt}`
-          imageFiles[img.id].width = imageFiles[img.id].width ?? thumbnail.width
-          imageFiles[img.id].height = imageFiles[img.id].height ?? thumbnail.height
-          thumbnailFiles[img.id] = {
-            path: thumbnailPath,
-            width: thumbnail.width,
-            height: thumbnail.height,
-            thumbnailVersion: thumbnail.thumbnailVersion,
+      for (let i = 0; i < allImageIds.length; i += BATCH_SIZE) {
+        const batchIds = allImageIds.slice(i, i + BATCH_SIZE)
+        const batch = await getImagesBatch(batchIds)
+
+        for (const img of batch) {
+          const { ext, bytes } = dataUrlToBytes(img.dataUrl)
+          const path = `images/${img.id}.${ext}`
+          const createdAt = img.createdAt ?? imageCreatedAtFallback.get(img.id) ?? exportedAt
+          imageFiles[img.id] = {
+            path,
+            createdAt,
+            source: img.source,
+            width: img.width,
+            height: img.height,
           }
-          zipFiles[thumbnailPath] = [thumbnailBytes, { mtime: new Date(createdAt) }]
-          cacheThumbnail(img.id, {
-            dataUrl: thumbnail.thumbnailDataUrl,
-            width: thumbnail.width,
-            height: thumbnail.height,
-            thumbnailVersion: thumbnail.thumbnailVersion,
-          })
+          zipFiles[path] = [bytes, { mtime: new Date(createdAt) }]
+
+          const thumbnail = await getImageThumbnail(img.id)
+          if (thumbnail?.thumbnailDataUrl) {
+            const { ext: thumbnailExt, bytes: thumbnailBytes } = dataUrlToBytes(thumbnail.thumbnailDataUrl)
+            const thumbnailPath = `thumbnails/${img.id}.${thumbnailExt}`
+            imageFiles[img.id].width = imageFiles[img.id].width ?? thumbnail.width
+            imageFiles[img.id].height = imageFiles[img.id].height ?? thumbnail.height
+            thumbnailFiles[img.id] = {
+              path: thumbnailPath,
+              width: thumbnail.width,
+              height: thumbnail.height,
+              thumbnailVersion: thumbnail.thumbnailVersion,
+            }
+            zipFiles[thumbnailPath] = [thumbnailBytes, { mtime: new Date(createdAt) }]
+            cacheThumbnail(img.id, {
+              dataUrl: thumbnail.thumbnailDataUrl,
+              width: thumbnail.width,
+              height: thumbnail.height,
+              thumbnailVersion: thumbnail.thumbnailVersion,
+            })
+          }
         }
+        // 每批处理完毕后释放引用，让 GC 可以回收 dataUrl 字符串
       }
     }
 
@@ -1934,7 +1983,7 @@ export async function promoteCandidateToStage(candidateId: string): Promise<void
   if (primaryDataUrl) {
     const existingImages = state.inputImages
     if (!existingImages.some((img) => img.id === candidate.primaryImageId)) {
-      state.setInputImages([{ id: candidate.primaryImageId, dataUrl: primaryDataUrl }])
+      state.setInputImages([{ id: candidate.primaryImageId, dataUrl: primaryDataUrl, sourceCandidateId: candidate.id }])
     }
   }
   useStore.setState({
@@ -2068,7 +2117,7 @@ export async function crossStagePromoteCandidate(candidateId: string, targetStag
   if (primaryDataUrl) {
     const existingImages = state.inputImages
     if (!existingImages.some((img) => img.id === candidate.primaryImageId)) {
-      state.setInputImages([{ id: candidate.primaryImageId, dataUrl: primaryDataUrl }])
+      state.setInputImages([{ id: candidate.primaryImageId, dataUrl: primaryDataUrl, sourceCandidateId: candidate.id }])
     }
   }
   useStore.setState({
@@ -2109,7 +2158,7 @@ export async function backtrackCandidate(candidateId: string, targetStage?: Work
   if (primaryDataUrl) {
     const existingImages = state.inputImages
     if (!existingImages.some((img) => img.id === source.primaryImageId)) {
-      state.setInputImages([{ id: source.primaryImageId, dataUrl: primaryDataUrl }])
+      state.setInputImages([{ id: source.primaryImageId, dataUrl: primaryDataUrl, sourceCandidateId: source.id }])
     }
   }
   useStore.setState({

@@ -110,6 +110,8 @@ export interface InputImage {
   id: string
   /** data URL，用于预览 */
   dataUrl: string
+  /** 来源候选 ID，晋级操作自动带入 */
+  sourceCandidateId?: string
 }
 
 export interface MaskDraft {
@@ -162,8 +164,8 @@ export interface TaskRecord {
   finishedAt: number | null
   /** 总耗时毫秒 */
   elapsed: number | null
-  /** 是否收藏 */
-  isFavorite?: boolean
+  /** 评分：1-5 星，null 表示未评分 */
+  rating?: number | null
   /** 视频任务：生成的视频 URL（data URL 或 https URL） */
   videoUrl?: string
   /** 视频任务：来源候选 ID，保持与工作流候选分支的关联（per D-03） */

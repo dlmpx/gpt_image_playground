@@ -1003,6 +1003,14 @@ export default function InputBar() {
               MASK
             </span>
           )}
+          {img.sourceCandidateId && (
+            <span
+              className="absolute left-1 bottom-1 rounded bg-purple-500/90 px-1.5 py-0.5 text-[8px] leading-none text-white backdrop-blur-sm z-10 pointer-events-none max-w-[80px] truncate"
+              title={`来自候选 #${img.sourceCandidateId}`}
+            >
+              #{img.sourceCandidateId.substring(0, 8)}
+            </span>
+          )}
           {canEdit && (
             <button 
               className="absolute inset-0 w-full h-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer z-20 focus:outline-none border-none"
@@ -1596,6 +1604,7 @@ export default function InputBar() {
                   onMouseLeave={() => setSubmitHover(false)}
                 >
                   <ButtonTooltip visible={!hasSubmitApiConfig && submitHover} text="尚未完成 API 配置，请在右上角设置中进行" />
+                  <ButtonTooltip visible={hasSubmitApiConfig && !canSubmit && submitHover} text="请输入提示词" />
                   <button
                     onClick={() => hasSubmitApiConfig ? submitTask() : setShowSettings(true)}
                     disabled={hasSubmitApiConfig ? !canSubmit : false}
@@ -1604,7 +1613,7 @@ export default function InputBar() {
                         ? 'bg-gray-300 dark:bg-white/[0.06] text-white cursor-pointer'
                         : 'bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-white/[0.04] disabled:opacity-50 disabled:cursor-not-allowed'
                     }`}
-                    title={!hasSubmitApiConfig ? '请配置 API Key' : !prompt.trim() ? '请输入提示词' : maskDraft ? '遮罩编辑 (Ctrl+Enter)' : '生成 (Ctrl+Enter)'}
+                    title={!hasSubmitApiConfig ? '请配置 API Key' : maskDraft ? '遮罩编辑 (Ctrl+Enter)' : '生成 (Ctrl+Enter)'}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -1650,10 +1659,11 @@ export default function InputBar() {
                   onMouseLeave={() => setSubmitHover(false)}
                 >
                   <ButtonTooltip visible={!hasSubmitApiConfig && submitHover} text="尚未完成 API 配置，请在右上角设置中进行" />
+                  <ButtonTooltip visible={hasSubmitApiConfig && !canSubmit && submitHover} text="请输入提示词" />
                   <button
                     onClick={() => hasSubmitApiConfig ? submitTask() : setShowSettings(true)}
                     disabled={hasSubmitApiConfig ? !canSubmit : false}
-                    title={!hasSubmitApiConfig ? '请配置 API Key' : !prompt.trim() ? '请输入提示词' : maskDraft ? '遮罩编辑' : '生成图像'}
+                    title={!hasSubmitApiConfig ? '请配置 API Key' : maskDraft ? '遮罩编辑' : '生成图像'}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all shadow-sm ${
                       !hasSubmitApiConfig
                         ? 'bg-gray-300 dark:bg-white/[0.06] text-white cursor-pointer'

@@ -183,6 +183,28 @@ export default function WorkflowPanel() {
     setCollapsedStages(new Set(emptyStages))
   }, [activeWorkflowRunId])
 
+  // 候选新增后自动展开对应阶段（仅移除不新增，避免覆盖用户的手动展开操作）
+  useEffect(() => {
+    if (!activeRun) return
+    const nonEmptyStages = new Set<WorkflowStage>()
+    for (const s of [1, 2, 3, 4] as WorkflowStage[]) {
+      if ((groupedByStage.get(s) || []).filter((c) => c.decision !== 'discarded').length > 0) {
+        nonEmptyStages.add(s)
+      }
+    }
+    setCollapsedStages((prev) => {
+      const next = new Set(prev)
+      let changed = false
+      for (const s of nonEmptyStages) {
+        if (next.has(s)) {
+          next.delete(s)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [workflowCandidates, activeRun])
+
   useEffect(() => {
     if (!activeRun) return
     const currentStage = activeRun.currentStage
@@ -266,7 +288,7 @@ export default function WorkflowPanel() {
           <option value="">-- 未选择 --</option>
           {workflowRuns.map((run) => (
             <option key={run.id} value={run.id}>
-              {run.name}<span className="ml-1.5 inline-flex items-center rounded-full bg-purple-100 dark:bg-purple-500/20 px-1.5 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400">阶段{run.currentStage}</span>{run.goalStyle ? ` · ${run.goalStyle}` : ''}
+              {run.name} [阶段{run.currentStage}]{run.goalStyle ? ` · ${run.goalStyle}` : ''}
             </option>
           ))}
         </select>
