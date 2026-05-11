@@ -75,6 +75,7 @@ export default function WorkflowPanel() {
   const lastClickTimeRef = useRef<number>(0)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   const dragCompletedRef = useRef(false)
+  const [popoverExiting, setPopoverExiting] = useState(false)
 
   // 晋级前检查清单状态
   const [pendingPromotion, setPendingPromotion] = useState<{
@@ -151,11 +152,12 @@ export default function WorkflowPanel() {
     if (!popoverData) return
     const handleClick = (e: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setPopoverData(null)
+        setPopoverExiting(true)
+        setTimeout(() => { setPopoverData(null); setPopoverExiting(false) }, 150)
       }
     }
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setPopoverData(null)
+      if (e.key === 'Escape') { setPopoverExiting(true); setTimeout(() => { setPopoverData(null); setPopoverExiting(false) }, 150) }
     }
     // 延迟绑定以避免当前事件触发关闭
     const timer = setTimeout(() => {
@@ -277,8 +279,10 @@ export default function WorkflowPanel() {
             <svg className="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-3-3v6m-7 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-            <p className="text-gray-500 dark:text-gray-400 font-medium mb-1">暂无活跃工作流</p>
-            <p>请新建或从上方选择工作流开始创作</p>
+            <p className="text-gray-500 dark:text-gray-400 font-medium mb-1">
+              {workflowRuns.length > 0 ? '请从上方选择一个工作流' : '暂无活跃工作流'}
+            </p>
+            <p>{workflowRuns.length > 0 ? '选择工作流后即可查看画布' : '请新建或从上方选择工作流开始创作'}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3">
@@ -1006,7 +1010,7 @@ export default function WorkflowPanel() {
         return (
           <div
             ref={popoverRef}
-            className="fixed z-50 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-white/[0.08] p-1.5 flex flex-col gap-0.5 backdrop-blur-xl animate-scale-in"
+            className={`fixed z-50 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-white/[0.08] p-1.5 flex flex-col gap-0.5 backdrop-blur-xl transition-all duration-150 ease-out ${popoverExiting ? 'opacity-0 scale-90' : 'animate-scale-in'}`}
             style={{ top: py, left: px }}
           >
             {quickActions.map((act) => (
