@@ -58,6 +58,8 @@ export default function WorkflowPanel() {
   const [dragSourceStage, setDragSourceStage] = useState<WorkflowStage | null>(null)
   const [hoveredStage, setHoveredStage] = useState<WorkflowStage | null>(null)
   const [hoveredDiscard, setHoveredDiscard] = useState(false)
+  const [isShiftDrag, setIsShiftDrag] = useState(false)
+  const [bouncingCandidateId, setBouncingCandidateId] = useState<string | null>(null)
 
   // 快捷操作浮层状态（D-02）
   const [popoverData, setPopoverData] = useState<{ candidateId: string; x: number; y: number } | null>(null)
@@ -69,6 +71,7 @@ export default function WorkflowPanel() {
   const touchStartPosRef = useRef<{ x: number; y: number } | null>(null)
   const lastClickTimeRef = useRef<number>(0)
   const popoverRef = useRef<HTMLDivElement | null>(null)
+  const dragCompletedRef = useRef(false)
 
   // 晋级前检查清单状态
   const [pendingPromotion, setPendingPromotion] = useState<{
@@ -88,12 +91,24 @@ export default function WorkflowPanel() {
       from { transform: scale(0.9); opacity: 0; }
       to { transform: scale(1); opacity: 1; }
     }
+    @keyframes greenPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+      50% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.1); }
+    }
+    @keyframes bounce-back {
+      0% { transform: scale(0.95); }
+      40% { transform: scale(1.05); }
+      70% { transform: scale(0.98); }
+      100% { transform: scale(1); }
+    }
     @keyframes discardPulse {
       0%, 100% { border-color: rgba(248, 113, 113, 0.4); }
       50% { border-color: rgba(248, 113, 113, 0.9); }
     }
     .animate-purple-pulse { animation: purplePulse 0.6s ease-in-out infinite; }
     .animate-scale-in { animation: scale-in 150ms ease-out; }
+    .animate-green-pulse { animation: greenPulse 0.6s ease-in-out infinite; }
+    .animate-bounce-back { animation: bounce-back 200ms ease-out; }
     .animate-discard-pulse { animation: discardPulse 0.5s ease-in-out infinite; }
   `
 
@@ -250,7 +265,9 @@ export default function WorkflowPanel() {
                   className={`flex flex-col rounded-2xl border overflow-hidden min-h-[200px] transition-all duration-200 ${
                     hoveredStage === stage && dragSourceStage != null
                       ? stage > dragSourceStage
-                        ? 'ring-2 ring-purple-400 bg-purple-50/50 dark:bg-purple-500/10 border-purple-400 animate-purple-pulse'
+                        ? isShiftDrag
+                          ? 'ring-2 ring-green-500 bg-green-50/50 dark:bg-green-500/10 border-green-500 animate-green-pulse'
+                          : 'ring-2 ring-purple-400 bg-purple-50/50 dark:bg-purple-500/10 border-purple-400 animate-purple-pulse'
                         : stage === dragSourceStage
                           ? 'ring-2 ring-green-400 bg-green-50/50 dark:bg-green-500/10 border-green-400 animate-pulse'
                           : 'ring-2 ring-red-400 bg-red-50/50 dark:bg-red-500/10 border-red-400 animate-pulse'
@@ -259,6 +276,7 @@ export default function WorkflowPanel() {
                   onDragOver={(e) => {
                     e.preventDefault()
                     if (hoveredStage !== stage) setHoveredStage(stage)
+                    setIsShiftDrag(e.shiftKey)
                   }}
                   onDragLeave={(e) => {
                     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
@@ -272,17 +290,24 @@ export default function WorkflowPanel() {
                       const srcStage: WorkflowStage = data.sourceStage
                       const candidateId: string = data.candidateId
                       if (srcStage !== stage) {
-                        const template = getTemplateByStage(stage)
-                        const checklist = template?.reviewChecklist
-                        if (checklist && checklist.length > 0) {
-                          setPendingPromotion({
-                            candidateId,
-                            targetStage: stage,
-                            stageName: template?.name || `阶段${stage}`,
-                            items: checklist,
-                          })
-                        } else {
+                        if (e.shiftKey) {
                           void crossStagePromoteCandidate(candidateId, stage)
+                          dragCompletedRef.current = true
+                        } else {
+                          const template = getTemplateByStage(stage)
+                          const checklist = template?.reviewChecklist
+                          if (checklist && checklist.length > 0) {
+                            setPendingPromotion({
+                              candidateId,
+                              targetStage: stage,
+                              stageName: template?.name || `阶段${stage}`,
+                              items: checklist,
+                            })
+                            dragCompletedRef.current = true
+                          } else {
+                            void crossStagePromoteCandidate(candidateId, stage)
+                            dragCompletedRef.current = true
+                          }
                         }
                       }
                     } catch { /* 忽略无效拖拽数据 */ }
@@ -291,6 +316,7 @@ export default function WorkflowPanel() {
                     setDragSourceStage(null)
                     setHoveredStage(null)
                     setHoveredDiscard(false)
+                    setIsShiftDrag(false)
                   }}
                 >
                   {/* 阶段头部 */}
@@ -433,20 +459,28 @@ export default function WorkflowPanel() {
                                 setActiveCandidate(candidate.id)
                               }}
                               onDragEnd={() => {
+                                if (!dragCompletedRef.current) {
+                                  setBouncingCandidateId(candidate.id)
+                                  setTimeout(() => setBouncingCandidateId(null), 250)
+                                }
+                                dragCompletedRef.current = false
                                 setIsDragging(false)
                                 setDragCandidateId(null)
                                 setDragSourceStage(null)
                                 setHoveredStage(null)
                                 setHoveredDiscard(false)
+                                setIsShiftDrag(false)
                               }}
                               className={`relative w-full min-h-[7rem] bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-white/[0.05] hover:shadow-md hover:border-purple-200 dark:hover:border-purple-500/20 transition-all duration-200 p-1.5 cursor-pointer ${
                                 isActive ? 'ring-2 ring-purple-500 ring-offset-1 ring-offset-white dark:ring-offset-gray-800' : ''
                               } ${
-                                isDragging && dragCandidateId === candidate.id
-                                  ? 'opacity-50 scale-95 shadow-lg shadow-purple-500/30'
-                                  : isDragging
-                                    ? 'opacity-60'
-                                    : ''
+                                bouncingCandidateId === candidate.id
+                                  ? 'animate-bounce-back'
+                                  : isDragging && dragCandidateId === candidate.id
+                                    ? 'opacity-50 scale-95 shadow-lg shadow-purple-500/30'
+                                    : isDragging
+                                      ? 'opacity-60'
+                                      : ''
                               }`}
                             >
                               {/* 对比复选框 */}
