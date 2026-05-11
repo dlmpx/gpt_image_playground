@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { initStore } from './store'
+import { initStore, rateTask, rateSelectedTasks } from './store'
 import { useStore } from './store'
 import { buildSettingsFromUrlParams, clearUrlSettingParams, hasUrlSettingParams } from './lib/urlSettings'
 import { useDockerApiUrlMigrationNotice } from './hooks/useDockerApiUrlMigrationNotice'
@@ -50,6 +50,33 @@ export default function App() {
     document.addEventListener('dragstart', preventPageImageDrag)
     return () => document.removeEventListener('dragstart', preventPageImageDrag)
   }, [])
+
+  // 全局快捷键：Cmd/Ctrl + 1~5 评分
+  const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = isMac ? e.metaKey : e.ctrlKey
+      if (!mod) return
+      const digit = parseInt(e.key)
+      if (!Number.isFinite(digit) || digit < 1 || digit > 5) return
+
+      // 打字时不触发
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+
+      e.preventDefault()
+
+      const state = useStore.getState()
+      if (state.detailTaskId) {
+        rateTask(state.detailTaskId, digit)
+      } else if (state.selectedTaskIds.length) {
+        rateSelectedTasks(digit)
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isMac])
 
   return (
     <>

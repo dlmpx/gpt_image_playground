@@ -79,7 +79,7 @@ export default function HelpModal({ onClose }: HelpModalProps) {
                   批量操作
                 </h4>
                 <div className="space-y-4">
-                  <p>选中一条或多条记录后，页面底部会出现操作栏，支持<strong className="text-yellow-500 dark:text-yellow-400 font-medium">批量收藏</strong>、<strong className="text-red-500 dark:text-red-400 font-medium">批量删除</strong>，或<strong className="text-blue-500 dark:text-blue-400 font-medium">全选当前可见记录</strong>。</p>
+                  <p>选中一条或多条记录后，页面底部会出现操作栏，支持<strong className="text-yellow-500 dark:text-yellow-400 font-medium">批量评分</strong>、<strong className="text-red-500 dark:text-red-400 font-medium">批量删除</strong>，或<strong className="text-blue-500 dark:text-blue-400 font-medium">全选当前可见记录</strong>。</p>
                 </div>
               </section>
             </>
@@ -95,9 +95,26 @@ export default function HelpModal({ onClose }: HelpModalProps) {
                 <div className="space-y-4">
                   <ul className="list-disc pl-4 space-y-2">
                     <li>使用鼠标在空白处<strong className="text-blue-500 dark:text-blue-400 font-medium">拖拽框选</strong>。</li>
-                    <li>按住 <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">Ctrl</kbd> 或 <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">⌘</kbd> 并点击卡片，可添加或移除单项。</li>
+                    <li>按住 <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">Ctrl</kbd> / <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">⌘</kbd> 并点击卡片，可添加或移除单项。</li>
+                    <li>按住 <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">Alt</kbd> / <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">⌥</kbd> 并点击卡片，直接打开大图预览。</li>
                     <li>再次框选已选中的卡片会将其取消选中。</li>
                     <li>点击卡片外任意空白处可取消所有选择。</li>
+                  </ul>
+                </div>
+              </section>
+              <section>
+                <h4 className="mb-4 text-sm font-medium text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                  评分与快捷键
+                </h4>
+                <div className="space-y-4">
+                  <ul className="list-disc pl-4 space-y-2">
+                    <li>卡片和详情面板上的星星可<strong className="text-yellow-500 dark:text-yellow-400 font-medium">点击评分</strong>（1-5 星），再次点击已选星级可取消评分。</li>
+                    <li><kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">Ctrl</kbd> / <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">⌘</kbd> + <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">1~5</kbd> — 详情面板打开时评当前任务，列表有选中时批量评分。</li>
+                    <li>按住 <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">Alt</kbd> / <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">⌥</kbd> 并<strong className="text-blue-500 dark:text-blue-400 font-medium">点击卡片</strong>可快速打开大图预览。</li>
+                    <li>筛选栏的<strong className="text-gray-700 dark:text-gray-200 font-medium">评分下拉</strong>可按「已评分 / 具体星级 / 未评分」筛选记录。</li>
                   </ul>
                 </div>
               </section>
@@ -109,7 +126,7 @@ export default function HelpModal({ onClose }: HelpModalProps) {
                   批量操作
                 </h4>
                 <div className="space-y-4">
-                  <p>选中一条或多条记录后，页面底部会出现操作栏，支持<strong className="text-yellow-500 dark:text-yellow-400 font-medium">批量收藏</strong>、<strong className="text-red-500 dark:text-red-400 font-medium">批量删除</strong>，或<strong className="text-blue-500 dark:text-blue-400 font-medium">全选当前可见记录</strong>。</p>
+                  <p>选中一条或多条记录后，页面底部会出现操作栏，支持<strong className="text-yellow-500 dark:text-yellow-400 font-medium">批量评分</strong>、<strong className="text-red-500 dark:text-red-400 font-medium">批量删除</strong>，或<strong className="text-blue-500 dark:text-blue-400 font-medium">全选当前可见记录</strong>。</p>
                 </div>
               </section>
             </>

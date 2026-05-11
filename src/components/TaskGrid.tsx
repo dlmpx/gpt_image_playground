@@ -2,12 +2,20 @@ import { useMemo, useRef, useState, useEffect } from 'react'
 import { useStore, reuseConfig, editOutputs, removeTask } from '../store'
 import TaskCard from './TaskCard'
 
+function matchRatingFilter(rating: number | null | undefined, filterRating: number | null): boolean {
+  if (filterRating == null) return true
+  if (filterRating === -1) return rating != null && rating >= 1
+  if (filterRating === -2) return rating == null || rating < 1
+  return rating === filterRating
+}
+
 export default function TaskGrid() {
   const tasks = useStore((s) => s.tasks)
   const searchQuery = useStore((s) => s.searchQuery)
   const filterStatus = useStore((s) => s.filterStatus)
-  const filterFavorite = useStore((s) => s.filterFavorite)
+  const filterRating = useStore((s) => s.filterRating)
   const setDetailTaskId = useStore((s) => s.setDetailTaskId)
+  const setLightboxImageId = useStore((s) => s.setLightboxImageId)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
   const selectedTaskIds = useStore((s) => s.selectedTaskIds)
   const setSelectedTaskIds = useStore((s) => s.setSelectedTaskIds)
@@ -29,16 +37,16 @@ export default function TaskGrid() {
     const q = searchQuery.trim().toLowerCase()
     
     return sorted.filter((t) => {
-      if (filterFavorite && !t.isFavorite) return false
+      if (!matchRatingFilter(t.rating, filterRating)) return false
       const matchStatus = filterStatus === 'all' || t.status === filterStatus
       if (!matchStatus) return false
-      
+
       if (!q) return true
       const prompt = (t.prompt || '').toLowerCase()
       const paramStr = JSON.stringify(t.params).toLowerCase()
       return prompt.includes(q) || paramStr.includes(q)
     })
-  }, [tasks, searchQuery, filterStatus, filterFavorite])
+  }, [tasks, searchQuery, filterStatus, filterRating])
 
   const handleDelete = (task: typeof tasks[0]) => {
     setConfirmDialog({
@@ -168,7 +176,7 @@ export default function TaskGrid() {
   if (!filteredTasks.length) {
     return (
       <div className="text-center py-20 text-gray-400 dark:text-gray-500">
-        {searchQuery || filterFavorite ? (
+        {searchQuery || filterRating ? (
           <p className="text-sm">没有找到匹配的记录</p>
         ) : (
           <>
@@ -210,7 +218,10 @@ export default function TaskGrid() {
                 }
                 suppressClickUntil.current = 0
                 const isCtrl = isMac ? e.metaKey : e.ctrlKey
-                if (isCtrl) {
+                const isAlt = (e as React.MouseEvent).altKey
+                if (isAlt && task.outputImages?.length) {
+                  setLightboxImageId(task.outputImages[0], task.outputImages)
+                } else if (isCtrl) {
                   useStore.getState().toggleTaskSelection(task.id)
                 } else if (selectedTaskIds.length > 0) {
                   clearSelection()

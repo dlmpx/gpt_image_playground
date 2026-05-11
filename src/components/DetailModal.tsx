@@ -1,9 +1,10 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun, backtrackCandidate, updateCandidateNotes, submitVideoTask } from '../store'
+import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun, backtrackCandidate, updateCandidateNotes, submitVideoTask, rateTask } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { formatImageRatio } from '../lib/size'
 import { ActualValueBadge, DetailParamValue } from '../lib/paramDisplay'
+import StarRating from './StarRating'
 import { copyBlobToClipboard, copyTextToClipboard, getClipboardFailureMessage } from '../lib/clipboard'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import { getTemplateByStage } from '../lib/workflowTemplates'
@@ -245,8 +246,8 @@ export default function DetailModal() {
     })
   }
 
-  const handleToggleFavorite = () => {
-    updateTaskInStore(task.id, { isFavorite: !task.isFavorite })
+  const handleRatingChange = (r: number | null) => {
+    rateTask(task.id, r)
   }
 
   const handleCopyError = async () => {
@@ -732,19 +733,14 @@ export default function DetailModal() {
               <TrashIcon className="w-4 h-4 flex-shrink-0" />
               删除记录
             </button>
-            <button
-              onClick={handleToggleFavorite}
-              className={`col-span-1 sm:flex-none sm:w-11 w-full flex items-center justify-center rounded-xl transition ${
-                task.isFavorite
-                  ? 'bg-yellow-50 text-yellow-500 hover:bg-yellow-100 dark:bg-yellow-500/10 dark:hover:bg-yellow-500/20'
-                  : 'bg-gray-50 text-gray-400 hover:bg-yellow-50 hover:text-yellow-500 dark:bg-white/[0.04] dark:hover:bg-yellow-500/10'
-              }`}
-              title={task.isFavorite ? '取消收藏' : '收藏记录'}
-            >
-              <svg className="w-5 h-5" fill={task.isFavorite ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-              </svg>
-            </button>
+            <div className="col-span-1 sm:flex-none sm:w-auto w-full flex items-center justify-center rounded-xl bg-gray-50 dark:bg-white/[0.04] px-2 gap-1.5">
+              <StarRating
+                rating={task.rating ?? null}
+                onChange={handleRatingChange}
+                size="md"
+              />
+              <span className="text-[9px] text-gray-400 dark:text-gray-500 hidden sm:inline whitespace-nowrap">⌘1-5</span>
+            </div>
             {/* 生成视频按钮 — v2.0 前禁用 */}
             {/* TODO(v2.0): 恢复 submitVideoTask */}
             {!taskCandidate && task.status === 'done' && task.outputImages.length > 0 && (

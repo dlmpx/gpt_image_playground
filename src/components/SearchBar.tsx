@@ -1,17 +1,46 @@
 import { useStore } from '../store'
 import Select from './Select'
 
+const RATING_FILTER_OPTIONS = [
+  { label: '全部评分', value: 'all' },
+  { label: '已评分', value: 'rated' },
+  { label: '★★★★★', value: '5' },
+  { label: '★★★★', value: '4' },
+  { label: '★★★', value: '3' },
+  { label: '★★', value: '2' },
+  { label: '★', value: '1' },
+  { label: '未评分', value: 'unrated' },
+]
+
 export default function SearchBar() {
   const searchQuery = useStore((s) => s.searchQuery)
   const setSearchQuery = useStore((s) => s.setSearchQuery)
   const filterStatus = useStore((s) => s.filterStatus)
   const setFilterStatus = useStore((s) => s.setFilterStatus)
-  const filterFavorite = useStore((s) => s.filterFavorite)
-  const setFilterFavorite = useStore((s) => s.setFilterFavorite)
+  const filterRating = useStore((s) => s.filterRating)
+  const setFilterRating = useStore((s) => s.setFilterRating)
   const tasks = useStore((s) => s.tasks)
+
+  const ratingFilterValue =
+    filterRating == null ? 'all' :
+    filterRating === -1 ? 'rated' :
+    filterRating === -2 ? 'unrated' :
+    String(filterRating)
+  // 特殊值 'rated' 和 'unrated' 不走数字路径
+  const resolveRatingFilter = (val: string): number | null | 'rated' | 'unrated' => {
+    if (val === 'rated') return 'rated'
+    if (val === 'unrated') return 'unrated'
+    if (val === 'all') return null
+    const n = Number(val)
+    return Number.isFinite(n) && n >= 1 && n <= 5 ? n : null
+  }
+
   const visibleCount = tasks.filter((t) => {
     if (filterStatus !== 'all' && t.status !== filterStatus) return false
-    if (filterFavorite && !t.isFavorite) return false
+    const rf = resolveRatingFilter(ratingFilterValue)
+    if (rf === 'rated' && (t.rating == null || t.rating < 1)) return false
+    if (rf === 'unrated' && t.rating != null && t.rating >= 1) return false
+    if (typeof rf === 'number' && t.rating !== rf) return false
     if (searchQuery && !t.prompt?.toLowerCase().includes(searchQuery.toLowerCase())) return false
     return true
   }).length
@@ -19,19 +48,6 @@ export default function SearchBar() {
   return (
     <div data-no-drag-select className="mt-6 mb-4 flex gap-3">
       <div className="flex gap-2 flex-shrink-0 z-20">
-        <button
-          onClick={() => setFilterFavorite(!filterFavorite)}
-          className={`p-2.5 rounded-xl border transition-all ${
-            filterFavorite
-              ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-500/10 text-yellow-500'
-              : 'border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.06]'
-          }`}
-          title={filterFavorite ? '取消只看收藏' : '只看收藏'}
-        >
-          <svg className="w-5 h-5" fill={filterFavorite ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-          </svg>
-        </button>
         <div className="relative w-28">
           <Select
             value={filterStatus}
@@ -42,6 +58,20 @@ export default function SearchBar() {
               { label: '生成中', value: 'running' },
               { label: '失败', value: 'error' },
             ]}
+            className="px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-white/[0.06] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
+          />
+        </div>
+        <div className="relative w-28">
+          <Select
+            value={ratingFilterValue}
+            onChange={(val) => {
+              const resolved = resolveRatingFilter(val)
+              if (resolved == null) { setFilterRating(null) }
+              else if (resolved === 'rated') { setFilterRating(-1) } // 使用 -1 标记"已评分"
+              else if (resolved === 'unrated') { setFilterRating(-2) } // 使用 -2 标记"未评分"
+              else { setFilterRating(resolved as number) }
+            }}
+            options={RATING_FILTER_OPTIONS}
             className="px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-white/[0.06] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
           />
         </div>
@@ -67,7 +97,7 @@ export default function SearchBar() {
           placeholder="搜索提示词、参数..."
           className="w-full pl-10 pr-16 py-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
         />
-        {(searchQuery || filterStatus !== 'all' || filterFavorite) && (
+        {(searchQuery || filterStatus !== 'all' || filterRating != null) && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 dark:text-gray-500">
             {visibleCount} 条
           </span>

@@ -202,6 +202,44 @@ export function getAllImages(): Promise<StoredImage[]> {
   return dbTransaction(STORE_IMAGES, 'readonly', (s) => s.getAll())
 }
 
+/** 分批获取图片，避免一次性加载所有 dataUrl 到内存 */
+export async function getImagesBatch(ids: string[]): Promise<StoredImage[]> {
+  if (ids.length === 0) return []
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_IMAGES, 'readonly')
+    const store = tx.objectStore(STORE_IMAGES)
+    const results: StoredImage[] = []
+    let remaining = ids.length
+    let settled = false
+
+    for (let i = 0; i < ids.length; i++) {
+      const req = store.get(ids[i])
+      req.onsuccess = () => {
+        if (settled) return
+        if (req.result) results.push(req.result)
+        remaining--
+        if (remaining === 0) {
+          settled = true
+          resolve(results)
+        }
+      }
+      req.onerror = () => {
+        if (settled) return
+        settled = true
+        reject(req.error)
+      }
+    }
+
+    tx.onerror = () => {
+      if (!settled) {
+        settled = true
+        reject(tx.error)
+      }
+    }
+  })
+}
+
 export function getAllImageIds(): Promise<string[]> {
   return dbTransaction(STORE_IMAGES, 'readonly', (s) => s.getAllKeys()).then((keys) =>
     keys.map(String),
