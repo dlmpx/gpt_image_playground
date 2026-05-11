@@ -77,8 +77,6 @@ export default function WorkflowPanel() {
     items: string[]
   } | null>(null)
 
-  if (!showWorkflowPanel) return null
-
   // 拖拽动画 CSS（D-03 颜色语义）
   const dragStyles = `
     @keyframes purplePulse {
@@ -151,6 +149,8 @@ export default function WorkflowPanel() {
       document.removeEventListener('keydown', handleKey)
     }
   }, [popoverData])
+
+  if (!showWorkflowPanel) return null
 
   const handleCreateRun = async () => {
     const name = window.prompt('工作流名称：', '新角色')
