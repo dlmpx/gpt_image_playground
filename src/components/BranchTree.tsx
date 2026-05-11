@@ -289,7 +289,7 @@ export default function BranchTree() {
 
   return (
     <div
-      className="fixed inset-0 z-45 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm animate-overlay-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm animate-overlay-in"
       onClick={() => setShowBranchTree(false)}
     >
       <div
