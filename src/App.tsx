@@ -69,6 +69,9 @@ export default function App() {
       const state = useStore.getState()
       if (state.detailTaskId) {
         rateTask(state.detailTaskId, digit)
+      } else if (state.lightboxImageId) {
+        const task = state.tasks.find((t) => t.outputImages.includes(state.lightboxImageId!))
+        if (task) rateTask(task.id, digit)
       } else if (state.selectedTaskIds.length) {
         rateSelectedTasks(digit)
       }
