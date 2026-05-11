@@ -8,6 +8,13 @@ export default function SearchBar() {
   const setFilterStatus = useStore((s) => s.setFilterStatus)
   const filterFavorite = useStore((s) => s.filterFavorite)
   const setFilterFavorite = useStore((s) => s.setFilterFavorite)
+  const tasks = useStore((s) => s.tasks)
+  const visibleCount = tasks.filter((t) => {
+    if (filterStatus !== 'all' && t.status !== filterStatus) return false
+    if (filterFavorite && !t.isFavorite) return false
+    if (searchQuery && !t.prompt?.toLowerCase().includes(searchQuery.toLowerCase())) return false
+    return true
+  }).length
 
   return (
     <div data-no-drag-select className="mt-6 mb-4 flex gap-3">
@@ -58,8 +65,13 @@ export default function SearchBar() {
           onChange={(e) => setSearchQuery(e.target.value)}
           type="text"
           placeholder="搜索提示词、参数..."
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
+          className="w-full pl-10 pr-16 py-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
         />
+        {(searchQuery || filterStatus !== 'all' || filterFavorite) && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 dark:text-gray-500">
+            {visibleCount} 条
+          </span>
+        )}
       </div>
     </div>
   )

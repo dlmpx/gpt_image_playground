@@ -1376,8 +1376,8 @@ export default function InputBar() {
               type="button"
               onClick={() => setInputBarMinimized(true)}
               className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-gray-500 shadow-sm ring-1 ring-black/5 transition-colors hover:text-gray-700 dark:bg-gray-950/70 dark:text-gray-400 dark:ring-white/10 dark:hover:text-gray-200"
-              title="隐藏创作面板"
-              aria-label="隐藏创作面板"
+              title="收起面板"
+              aria-label="收起面板"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7-7-7" />
@@ -1419,7 +1419,7 @@ export default function InputBar() {
               onClick={() => setShowWorkflowPanel(!showWorkflowPanel)}
               className="text-xs text-purple-400 hover:text-purple-600 dark:hover:text-purple-300 underline"
             >
-              {showWorkflowPanel ? "收起工作流" : "工作流"}
+              {showWorkflowPanel ? "收起画布" : "工作流"}
             </button>
           </div>
 
@@ -1463,8 +1463,8 @@ export default function InputBar() {
                         onClick={() => setRiskExpanded(!riskExpanded)}
                         className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-xs"
                       >
-                        <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <svg className={`w-3.5 h-3.5 text-amber-500 shrink-0 transition-transform duration-300 ${riskExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                         <span className="font-medium text-amber-600 dark:text-amber-400">风险提示</span>
                         <span className="text-amber-500/60 dark:text-amber-400/50 ml-1">{summaryText}</span>

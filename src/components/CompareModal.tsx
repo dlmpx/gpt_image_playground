@@ -450,10 +450,10 @@ export default function CompareModal() {
         })}
       </div>
 
-      {/* 底部快捷键提示栏 */}
+      {/* 底部快捷键提示栏（POLISH-01: 按实际候选数动态生成） */}
       <div className="relative z-10 h-8 flex items-center justify-center flex-shrink-0 bg-black/60">
         <span className="text-white/50 text-xs">
-          1/2/3/4 聚焦 · Enter 主推 · Delete 淘汰 · Esc 关闭
+          {comparedCandidates.length >= 2 && `${[...Array(comparedCandidates.length)].map((_, i) => i + 1).join('/')} 聚焦 · `}Enter 主推 · Delete 淘汰 · Esc 关闭
         </span>
       </div>
     </div>

@@ -266,7 +266,7 @@ export default function WorkflowPanel() {
           <option value="">-- 未选择 --</option>
           {workflowRuns.map((run) => (
             <option key={run.id} value={run.id}>
-              {run.name}（阶段 {run.currentStage}）{run.goalStyle ? ` · ${run.goalStyle}` : ''}
+              {run.name}<span className="ml-1.5 inline-flex items-center rounded-full bg-purple-100 dark:bg-purple-500/20 px-1.5 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400">阶段{run.currentStage}</span>{run.goalStyle ? ` · ${run.goalStyle}` : ''}
             </option>
           ))}
         </select>
@@ -673,7 +673,7 @@ export default function WorkflowPanel() {
                                   }}
                                   title="添加备注"
                                 >
-                                  + 备注
+                                  💬
                                 </button>
                               )}
 
