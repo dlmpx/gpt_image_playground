@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun, backtrackCandidate, updateCandidateNotes, submitVideoTask, rateTask } from '../store'
+import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun, backtrackCandidate, updateCandidateNotes, submitVideoTask, rateTask, trashTask, restoreTask } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { formatImageRatio } from '../lib/size'
@@ -65,6 +65,28 @@ export default function DetailModal() {
     setNow(Date.now())
     return () => window.clearInterval(id)
   }, [task?.customRecoverable, task?.falRecoverable, task?.status])
+
+  // D / Backspace 快速弃置/恢复
+  useEffect(() => {
+    if (!task) return
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement)?.isContentEditable) return
+
+      if (e.key === 'd' || e.key === 'D' || e.key === 'Backspace') {
+        e.preventDefault()
+        if (task.trashedAt) {
+          restoreTask(task.id)
+        } else {
+          trashTask(task.id)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [task])
 
   // 加载所有相关图片
   useEffect(() => {
@@ -725,6 +747,32 @@ export default function DetailModal() {
             >
               <EditIcon className="w-4 h-4 flex-shrink-0" />
               编辑输出
+            </button>
+            <button
+              onClick={() => {
+                if (task.trashedAt) {
+                  restoreTask(task.id)
+                } else {
+                  trashTask(task.id)
+                }
+              }}
+              className={`col-span-2 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl transition text-sm font-medium whitespace-nowrap ${
+                task.trashedAt
+                  ? 'bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20'
+                  : 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20'
+              }`}
+            >
+              {task.trashedAt ? (
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21l4-17m-6 0h14M5 4l2 4m10-4l-2 4m-4 9h3m-2-4h4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7.5 16l2-2m5 2l-2-2" />
+                </svg>
+              )}
+              {task.trashedAt ? '恢复记录' : '弃置记录'}
             </button>
             <button
               onClick={handleDelete}

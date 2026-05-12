@@ -346,7 +346,7 @@ interface AppState {
   // 搜索和筛选
   searchQuery: string
   setSearchQuery: (q: string) => void
-  filterStatus: 'all' | 'running' | 'done' | 'error'
+  filterStatus: 'all' | 'running' | 'done' | 'error' | 'trashed'
   setFilterStatus: (status: AppState['filterStatus']) => void
   filterRating: number | null
   setFilterRating: (r: number | null) => void
@@ -1567,6 +1567,55 @@ export async function removeTask(task: TaskRecord) {
   }
 
   showToast('记录已删除', 'success')
+}
+
+/** 弃置任务（软删除） */
+export async function trashTask(taskId: string) {
+  const { tasks, setTasks, showToast } = useStore.getState()
+  const task = tasks.find((t) => t.id === taskId)
+  if (!task || task.trashedAt) return
+
+  const updated = { ...task, trashedAt: Date.now() }
+  await putTask(updated)
+  setTasks(tasks.map((t) => (t.id === taskId ? updated : t)))
+  showToast('已移至弃置', 'info')
+}
+
+/** 恢复已弃置任务 */
+export async function restoreTask(taskId: string) {
+  const { tasks, setTasks, showToast } = useStore.getState()
+  const task = tasks.find((t) => t.id === taskId)
+  if (!task || !task.trashedAt) return
+
+  const { trashedAt: _, ...rest } = task as TaskRecord & { trashedAt: number }
+  const updated = { ...rest } as TaskRecord
+  await putTask(updated)
+  setTasks(tasks.map((t) => (t.id === taskId ? updated : t)))
+  showToast('已恢复记录', 'success')
+}
+
+/** 切换弃置状态（键盘快捷键用） */
+export async function toggleTrashTask(taskId: string) {
+  const { tasks } = useStore.getState()
+  const task = tasks.find((t) => t.id === taskId)
+  if (!task) return
+
+  if (task.trashedAt) {
+    await restoreTask(taskId)
+  } else {
+    await trashTask(taskId)
+  }
+}
+
+/** 清空回收站：永久删除所有已弃置任务 */
+export async function emptyTrash() {
+  const { tasks, showToast } = useStore.getState()
+  const trashedIds = tasks.filter((t) => t.trashedAt).map((t) => t.id)
+  if (!trashedIds.length) {
+    showToast('没有已弃置的记录', 'info')
+    return
+  }
+  await removeMultipleTasks(trashedIds)
 }
 
 /** 清空数据选项 */

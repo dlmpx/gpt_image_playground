@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import type { TaskRecord } from '../types'
-import { useStore, ensureImageThumbnailCached, subscribeImageThumbnail, updateTaskInStore, retryTask, addWorkflowCandidateFromTask, rateTask } from '../store'
+import { useStore, ensureImageThumbnailCached, subscribeImageThumbnail, updateTaskInStore, retryTask, addWorkflowCandidateFromTask, rateTask, trashTask, restoreTask } from '../store'
 import { formatImageRatio } from '../lib/size'
 import { ParamValue } from '../lib/paramDisplay'
 import StarRating from './StarRating'
@@ -225,7 +225,13 @@ export default function TaskCard({
           </svg>
         </div>
       )}
-      <div className="flex h-40">
+      {/* 弃置标记 */}
+      {task.trashedAt && (
+        <div className="absolute top-2 left-2 z-10 bg-amber-500/90 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm backdrop-blur-sm">
+          已弃置
+        </div>
+      )}
+      <div className={`flex h-40${task.trashedAt ? ' opacity-50' : ''}`}>
         {/* 左侧图片区域 */}
         <div className="w-40 min-w-[10rem] h-full bg-gray-100 dark:bg-black/20 relative flex items-center justify-center overflow-hidden flex-shrink-0">
           {task.status === 'running' && (
@@ -457,6 +463,33 @@ export default function TaskCard({
                     d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                   />
                 </svg>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (task.trashedAt) {
+                    restoreTask(task.id)
+                  } else {
+                    trashTask(task.id)
+                  }
+                }}
+                className={`p-1.5 rounded-md transition ${
+                  task.trashedAt
+                    ? 'hover:bg-green-50 dark:hover:bg-green-950/30 text-gray-400 hover:text-green-500'
+                    : 'hover:bg-amber-50 dark:hover:bg-amber-950/30 text-gray-400 hover:text-amber-500'
+                }`}
+                title={task.trashedAt ? '恢复记录' : '弃置记录'}
+              >
+                {task.trashedAt ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21l4-17m-6 0h14M5 4l2 4m10-4l-2 4m-4 9h3m-2-4h4" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7.5 16l2-2m5 2l-2-2" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>

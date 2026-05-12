@@ -37,9 +37,15 @@ export default function TaskGrid() {
     const q = searchQuery.trim().toLowerCase()
     
     return sorted.filter((t) => {
+      if (filterStatus === 'trashed') {
+        if (!t.trashedAt) return false
+      } else {
+        if (t.trashedAt) return false
+        const matchStatus = filterStatus === 'all' || t.status === filterStatus
+        if (!matchStatus) return false
+      }
+
       if (!matchRatingFilter(t.rating, filterRating)) return false
-      const matchStatus = filterStatus === 'all' || t.status === filterStatus
-      if (!matchStatus) return false
 
       if (!q) return true
       const prompt = (t.prompt || '').toLowerCase()

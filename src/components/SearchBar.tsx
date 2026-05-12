@@ -36,7 +36,12 @@ export default function SearchBar() {
   }
 
   const visibleCount = tasks.filter((t) => {
-    if (filterStatus !== 'all' && t.status !== filterStatus) return false
+    if (filterStatus === 'trashed') {
+      if (!t.trashedAt) return false
+    } else {
+      if (t.trashedAt) return false
+      if (filterStatus !== 'all' && t.status !== filterStatus) return false
+    }
     const rf = resolveRatingFilter(ratingFilterValue)
     if (rf === 'rated' && (t.rating == null || t.rating < 1)) return false
     if (rf === 'unrated' && t.rating != null && t.rating >= 1) return false
@@ -57,6 +62,7 @@ export default function SearchBar() {
               { label: '已完成', value: 'done' },
               { label: '生成中', value: 'running' },
               { label: '失败', value: 'error' },
+              { label: '已弃置', value: 'trashed' },
             ]}
             className="px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-white/[0.06] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
           />

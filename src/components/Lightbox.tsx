@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
-import { useStore, getCachedImage, ensureImageCached, rateTask } from '../store'
+import { useStore, getCachedImage, ensureImageCached, rateTask, trashTask, restoreTask } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
@@ -191,6 +191,18 @@ export default function Lightbox() {
         )
         if (task) {
           rateTask(task.id, null)
+        }
+      } else if (key === 'd' || key === 'D' || key === 'Backspace') {
+        e.preventDefault()
+        const task = tasks.find(
+          (t) => t.outputImages.includes(lightboxImageId) || t.inputImageIds.includes(lightboxImageId),
+        )
+        if (task) {
+          if (task.trashedAt) {
+            restoreTask(task.id)
+          } else {
+            trashTask(task.id)
+          }
         }
       }
     }

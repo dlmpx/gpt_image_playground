@@ -166,6 +166,8 @@ export interface TaskRecord {
   elapsed: number | null
   /** 评分：1-5 星，null 表示未评分 */
   rating?: number | null
+  /** 弃置时间戳，非空表示已弃置 */
+  trashedAt?: number
   /** 视频任务：生成的视频 URL（data URL 或 https URL） */
   videoUrl?: string
   /** 视频任务：来源候选 ID，保持与工作流候选分支的关联（per D-03） */
