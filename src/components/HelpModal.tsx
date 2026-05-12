@@ -112,9 +112,28 @@ export default function HelpModal({ onClose }: HelpModalProps) {
                 <div className="space-y-4">
                   <ul className="list-disc pl-4 space-y-2">
                     <li>卡片和详情面板上的星星可<strong className="text-yellow-500 dark:text-yellow-400 font-medium">点击评分</strong>（1-5 星），再次点击已选星级可取消评分。</li>
-                    <li><kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">Ctrl</kbd> / <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">⌘</kbd> + <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">1~5</kbd> — 详情面板打开时评当前任务，列表有选中时批量评分。</li>
+                    <li>直接按 <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">1</kbd> – <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">5</kbd> 为当前详情任务或选中任务评分，按 <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">0</kbd> 取消评分。（<kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">Ctrl/⌘</kbd> 修饰键不再必需，但仍可兼容使用）</li>
                     <li>按住 <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">Alt</kbd> / <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">⌥</kbd> 并<strong className="text-blue-500 dark:text-blue-400 font-medium">点击卡片</strong>可快速打开大图预览。</li>
                     <li>筛选栏的<strong className="text-gray-700 dark:text-gray-200 font-medium">评分下拉</strong>可按「已评分 / 具体星级 / 未评分」筛选记录。</li>
+                  </ul>
+                </div>
+              </section>
+              <section>
+                <h4 className="mb-4 text-sm font-medium text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  大图预览
+                </h4>
+                <div className="space-y-4">
+                  <ul className="list-disc pl-4 space-y-2">
+                    <li><kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">←</kbd> <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">→</kbd> 在当前任务的图片组内左右切换。</li>
+                    <li><kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">↑</kbd> <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">↓</kbd> 切换到上一个 / 下一个任务的图片组。</li>
+                    <li>按 <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">1</kbd> – <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">5</kbd> 为当前图片评分，<kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-sans">0</kbd> 取消评分。</li>
+                    <li>使用<strong className="text-blue-500 dark:text-blue-400 font-medium">滚轮或双指缩放</strong>、<strong className="text-blue-500 dark:text-blue-400 font-medium">双击</strong>放大/还原，<strong className="text-blue-500 dark:text-blue-400 font-medium">拖拽</strong>平移查看细节。</li>
+                    <li>缩放时底部信息栏与导航按钮自动隐藏，还原后重新显示。</li>
+                    <li>底部信息栏展示<strong className="text-yellow-500 dark:text-yellow-400 font-medium">评分星级</strong>、图片<strong className="text-gray-700 dark:text-gray-200 font-medium">原始尺寸</strong>，多图时显示当前位置（如 1 / 4）。</li>
                   </ul>
                 </div>
               </section>

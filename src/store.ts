@@ -1349,6 +1349,8 @@ export function rateTask(taskId: string, rating: number | null) {
   const { showToast } = useStore.getState()
   if (rating) {
     showToast(`已评 ${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}`, 'success')
+  } else {
+    showToast('已取消评分', 'info')
   }
 }
 

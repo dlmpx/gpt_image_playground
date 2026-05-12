@@ -51,14 +51,12 @@ export default function App() {
     return () => document.removeEventListener('dragstart', preventPageImageDrag)
   }, [])
 
-  // 全局快捷键：Cmd/Ctrl + 1~5 评分
-  const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+  // 全局快捷键：数字键 1~5 评分，0 取消评分（大图预览时由 Lightbox 自行处理）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const mod = isMac ? e.metaKey : e.ctrlKey
-      if (!mod) return
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
       const digit = parseInt(e.key)
-      if (!Number.isFinite(digit) || digit < 1 || digit > 5) return
+      if (!Number.isFinite(digit) || digit < 0 || digit > 5) return
 
       // 打字时不触发
       const tag = (e.target as HTMLElement)?.tagName
@@ -66,20 +64,22 @@ export default function App() {
 
       e.preventDefault()
 
+      const rating = digit === 0 ? null : digit
       const state = useStore.getState()
+
+      // Lightbox 自行处理评分，避免重复触发
+      if (state.lightboxImageId) return
+
       if (state.detailTaskId) {
-        rateTask(state.detailTaskId, digit)
-      } else if (state.lightboxImageId) {
-        const task = state.tasks.find((t) => t.outputImages.includes(state.lightboxImageId!))
-        if (task) rateTask(task.id, digit)
+        rateTask(state.detailTaskId, rating)
       } else if (state.selectedTaskIds.length) {
-        rateSelectedTasks(digit)
+        rating != null ? rateSelectedTasks(rating) : state.selectedTaskIds.forEach((id) => rateTask(id, null))
       }
     }
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isMac])
+  }, [])
 
   return (
     <>

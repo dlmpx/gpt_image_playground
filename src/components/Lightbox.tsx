@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useStore, getCachedImage, ensureImageCached } from '../store'
+import { useStore, getCachedImage, ensureImageCached, rateTask } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
@@ -26,7 +26,7 @@ export default function Lightbox() {
   useCloseOnEscape(Boolean(lightboxImageId), close)
   usePreventBackgroundScroll(Boolean(lightboxImageId))
 
-  // 图片加载
+  // 图片加载（切换时不立即清空 src，避免闪回底层界面）
   useEffect(() => {
     let cancelled = false
 
@@ -34,8 +34,6 @@ export default function Lightbox() {
       setSrc('')
       return
     }
-
-    setSrc('')
 
     const imageId = lightboxImageId
     const cached = getCachedImage(imageId)
@@ -123,7 +121,7 @@ export default function Lightbox() {
   const goPrev = useCallback(() => { if (showNav) goTo(currentIndex - 1) }, [showNav, currentIndex, goTo])
   const goNext = useCallback(() => { if (showNav) goTo(currentIndex + 1) }, [showNav, currentIndex, goTo])
 
-  // 键盘左右切换
+  // 键盘左右切换（当前任务内图片）
   useEffect(() => {
     if (!lightboxImageId || !showNav) return
     const onKey = (e: KeyboardEvent) => {
@@ -134,7 +132,78 @@ export default function Lightbox() {
     return () => window.removeEventListener('keydown', onKey)
   }, [lightboxImageId, showNav, goPrev, goNext])
 
+  // 键盘上下切换任务
+  useEffect(() => {
+    if (!lightboxImageId) return
+
+    const tasksWithImages = tasks
+      .filter((t) => t.outputImages.length > 0)
+      .sort((a, b) => b.createdAt - a.createdAt)
+
+    if (tasksWithImages.length <= 1) return
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+
+      const currentIdx = tasksWithImages.findIndex(
+        (t) => t.outputImages.includes(lightboxImageId) || t.inputImageIds.includes(lightboxImageId),
+      )
+      if (currentIdx === -1) return
+
+      let targetIdx: number
+      if (e.key === 'ArrowUp') {
+        targetIdx = (currentIdx - 1 + tasksWithImages.length) % tasksWithImages.length
+      } else {
+        targetIdx = (currentIdx + 1) % tasksWithImages.length
+      }
+
+      e.preventDefault()
+      const target = tasksWithImages[targetIdx]
+      setLightboxImageId(target.outputImages[0], target.outputImages)
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightboxImageId, tasks, setLightboxImageId])
+
+  // 键盘 1-5 直接评分
+  useEffect(() => {
+    if (!lightboxImageId) return
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
+      const key = e.key
+      if (key >= '1' && key <= '5') {
+        e.preventDefault()
+        const rating = parseInt(key)
+        const task = tasks.find(
+          (t) => t.outputImages.includes(lightboxImageId) || t.inputImageIds.includes(lightboxImageId),
+        )
+        if (task) {
+          rateTask(task.id, rating)
+        }
+      } else if (key === '0') {
+        e.preventDefault()
+        const task = tasks.find(
+          (t) => t.outputImages.includes(lightboxImageId) || t.inputImageIds.includes(lightboxImageId),
+        )
+        if (task) {
+          rateTask(task.id, null)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightboxImageId, tasks])
+
   if (!lightboxImageId || !src) return null
+
+  const currentTask = tasks.find(
+    (t) => t.outputImages.includes(lightboxImageId) || t.inputImageIds.includes(lightboxImageId),
+  )
 
   return (
     <LightboxInner
@@ -147,6 +216,7 @@ export default function Lightbox() {
       total={total}
       onPrev={goPrev}
       onNext={goNext}
+      rating={currentTask?.rating}
     />
   )
 }
@@ -161,11 +231,22 @@ interface LightboxInnerProps {
   total: number
   onPrev: () => void
   onNext: () => void
+  rating: number | null | undefined
 }
 
 /** 内部组件：保证挂载时 DOM 已经存在，所有 ref / effect 都可靠 */
-function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, currentIndex, total, onPrev, onNext }: LightboxInnerProps) {
+function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, currentIndex, total, onPrev, onNext, rating }: LightboxInnerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
+
+  const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(null)
+
+  const onImgLoad = useCallback(() => {
+    const img = imgRef.current
+    if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
+      setImageDims({ w: img.naturalWidth, h: img.naturalHeight })
+    }
+  }, [])
 
   // 用 ref 追踪最新变换，避免闭包过期
   const scaleRef = useRef(1)
@@ -483,10 +564,12 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
           }}
         >
           <img
+            ref={imgRef}
             src={src}
             data-image-id={imageId}
             className="saveable-image max-w-[85vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
             onDragStart={(e) => e.preventDefault()}
+            onLoad={onImgLoad}
             alt=""
           />
           {maskPreviewSrc && (
@@ -529,11 +612,23 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
           </span>
         </div>
       )}
-      {showNav && !isZoomed && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-none">
-          <span className="px-3 py-1.5 bg-black/50 text-white/80 text-xs rounded-full backdrop-blur-sm">
-            {currentIndex + 1} / {total}
-          </span>
+      {!isZoomed && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none">
+          {showNav && (
+            <span className="px-3 py-1.5 bg-black/50 text-white/80 text-xs rounded-full backdrop-blur-sm">
+              {currentIndex + 1} / {total}
+            </span>
+          )}
+          {(imageDims || (rating != null && rating > 0)) && (
+            <span className="px-3 py-1 bg-black/30 text-white/60 text-xs rounded-full backdrop-blur-sm inline-flex items-center gap-2">
+              {rating != null && rating > 0 && (
+                <span className="text-yellow-400/90">{"★".repeat(rating)}{"☆".repeat(5 - rating)}</span>
+              )}
+              {imageDims && (
+                <span>{imageDims.w} × {imageDims.h}</span>
+              )}
+            </span>
+          )}
         </div>
       )}
     </div>
