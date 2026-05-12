@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useStore, getCachedImage, ensureImageCached, rateTask } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
@@ -132,15 +132,15 @@ export default function Lightbox() {
     return () => window.removeEventListener('keydown', onKey)
   }, [lightboxImageId, showNav, goPrev, goNext])
 
+  // 保有输出图片的任务列表（时间降序，与网格视图一致）
+  const tasksWithImages = useMemo(
+    () => tasks.filter((t) => t.outputImages.length > 0).sort((a, b) => b.createdAt - a.createdAt),
+    [tasks],
+  )
+
   // 键盘上下切换任务
   useEffect(() => {
-    if (!lightboxImageId) return
-
-    const tasksWithImages = tasks
-      .filter((t) => t.outputImages.length > 0)
-      .sort((a, b) => b.createdAt - a.createdAt)
-
-    if (tasksWithImages.length <= 1) return
+    if (!lightboxImageId || tasksWithImages.length <= 1) return
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
@@ -164,7 +164,7 @@ export default function Lightbox() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [lightboxImageId, tasks, setLightboxImageId])
+  }, [lightboxImageId, tasksWithImages, setLightboxImageId])
 
   // 键盘 1-5 直接评分
   useEffect(() => {
@@ -205,6 +205,11 @@ export default function Lightbox() {
     (t) => t.outputImages.includes(lightboxImageId) || t.inputImageIds.includes(lightboxImageId),
   )
 
+  const taskGroupTotal = tasksWithImages.length
+  const taskIndex = tasksWithImages.findIndex(
+    (t) => t.outputImages.includes(lightboxImageId) || t.inputImageIds.includes(lightboxImageId),
+  )
+
   return (
     <LightboxInner
       src={src}
@@ -217,6 +222,8 @@ export default function Lightbox() {
       onPrev={goPrev}
       onNext={goNext}
       rating={currentTask?.rating}
+      taskIndex={taskIndex}
+      taskGroupTotal={taskGroupTotal}
     />
   )
 }
@@ -232,10 +239,12 @@ interface LightboxInnerProps {
   onPrev: () => void
   onNext: () => void
   rating: number | null | undefined
+  taskIndex: number
+  taskGroupTotal: number
 }
 
 /** 内部组件：保证挂载时 DOM 已经存在，所有 ref / effect 都可靠 */
-function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, currentIndex, total, onPrev, onNext, rating }: LightboxInnerProps) {
+function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, currentIndex, total, onPrev, onNext, rating, taskIndex, taskGroupTotal }: LightboxInnerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
 
@@ -582,6 +591,15 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
         </div>
       </div>
 
+      {/* 任务组指示器 */}
+      {taskGroupTotal > 1 && !isZoomed && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 pointer-events-none">
+          <span className="px-3 py-1.5 bg-black/40 text-white/70 text-xs rounded-full backdrop-blur-sm">
+            Task {taskIndex + 1} / {taskGroupTotal}
+          </span>
+        </div>
+      )}
+
       {/* 左右切换按钮 */}
       {showNav && !isZoomed && (
         <>
@@ -606,14 +624,14 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
 
       {/* 底部指示器 */}
       {showZoomBadge && isZoomed && zoomPercent !== 100 && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-none">
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none">
           <span className="px-3 py-1.5 bg-black/50 text-white/80 text-xs rounded-full backdrop-blur-sm transition-opacity duration-500">
             {zoomPercent}%
           </span>
         </div>
       )}
       {!isZoomed && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none">
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none">
           {showNav && (
             <span className="px-3 py-1.5 bg-black/50 text-white/80 text-xs rounded-full backdrop-blur-sm">
               {currentIndex + 1} / {total}
