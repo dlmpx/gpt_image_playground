@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PARAMS } from '../types'
 import { DEFAULT_SETTINGS } from './apiProfiles'
 import { callImageApi } from './api'
-import { readClientDevProxyConfig } from './devProxy'
 
 vi.mock('./devProxy', async () => {
   const actual = await vi.importActual<typeof import('./devProxy')>('./devProxy')
