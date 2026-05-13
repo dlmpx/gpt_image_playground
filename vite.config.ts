@@ -27,6 +27,15 @@ export default defineConfig(({ command }) => {
       __APP_VERSION__: JSON.stringify(pkg.version),
       __DEV_PROXY_CONFIG__: JSON.stringify(devProxyConfig),
     },
+    test: {
+      coverage: {
+        provider: 'v8',
+        thresholds: {
+          lines: 30,
+          branches: 20,
+        },
+      },
+    },
     server: {
       host: true,
       port: 6789,
