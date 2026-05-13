@@ -7,7 +7,6 @@ import {
   applyBatchDecision,
   crossStagePromoteCandidate,
   setShowCompareModal,
-  submitVideoTask,
 } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
@@ -151,8 +150,6 @@ function CandidateCard({ candidate, index, isFocused, imageUrl, loading, loadErr
         >
           晋级
         </button>
-        {/* 视频按钮 — v2.0 前禁用 */}
-        {/* TODO(v2.0): 恢复 submitVideoTask */}
       </div>
     </div>
   )

@@ -135,6 +135,14 @@ export function deleteWorkflowCandidate(id: string): Promise<undefined> {
   return dbTransaction(STORE_WORKFLOW_CANDIDATES, 'readwrite', (s) => s.delete(id))
 }
 
+export function clearWorkflowRuns(): Promise<undefined> {
+  return dbTransaction(STORE_WORKFLOW_RUNS, 'readwrite', (s) => s.clear())
+}
+
+export function clearWorkflowCandidates(): Promise<undefined> {
+  return dbTransaction(STORE_WORKFLOW_CANDIDATES, 'readwrite', (s) => s.clear())
+}
+
 // ===== Images =====
 
 export function getImage(id: string): Promise<StoredImage | undefined> {

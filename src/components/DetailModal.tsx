@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun, backtrackCandidate, updateCandidateNotes, submitVideoTask, rateTask, trashTask, restoreTask } from '../store'
+import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun, backtrackCandidate, updateCandidateNotes, rateTask, trashTask, restoreTask } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { formatImageRatio } from '../lib/size'
@@ -528,8 +528,6 @@ export default function DetailModal() {
               </div>
             </div>
           )}
-          {/* 视频显示区域 — v2.0 前禁用 */}
-          {/* TODO(v2.0): 恢复 videoUrl/videoStatus 渲染 */}
         </div>
 
         {/* 右侧：信息 */}
@@ -789,8 +787,6 @@ export default function DetailModal() {
               />
               <span className="text-[9px] text-gray-400 dark:text-gray-500 hidden sm:inline whitespace-nowrap">⌘1-5</span>
             </div>
-            {/* 生成视频按钮 — v2.0 前禁用 */}
-            {/* TODO(v2.0): 恢复 submitVideoTask */}
             {!taskCandidate && task.status === 'done' && task.outputImages.length > 0 && (
               <button
                 onClick={handleAddToWorkflow}
@@ -834,8 +830,6 @@ export default function DetailModal() {
                 回溯分叉
               </button>
             )}
-            {/* 视频已生成徽章 — v2.0 前禁用 */}
-            {/* TODO(v2.0): 恢复 videoUrl/videoStatus 状态徽章 */}
           </div>
         </div>
       </div>

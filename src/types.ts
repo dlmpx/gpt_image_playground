@@ -168,14 +168,10 @@ export interface TaskRecord {
   rating?: number | null
   /** 弃置时间戳，非空表示已弃置 */
   trashedAt?: number
-  /** 视频任务：生成的视频 URL（data URL 或 https URL） */
-  videoUrl?: string
-  /** 视频任务：来源候选 ID，保持与工作流候选分支的关联（per D-03） */
+  /** 参考图来源候选 ID，用于 InputBar 显示图片来源标签 */
   sourceCandidateId?: string
-  /** 视频任务：来源任务 ID，保持与原始生成任务的关联（per D-03） */
+  /** 工作流候选关联的原始任务 ID */
   sourceTaskId?: string
-  /** 视频任务：FAL 队列处理状态 */
-  videoStatus?: 'queued' | 'processing' | 'completed' | 'failed'
 }
 
 // ===== IndexedDB 存储的图片 =====
@@ -310,6 +306,8 @@ export interface ExportData {
     height?: number
     thumbnailVersion?: number
   }>
+  workflowRuns?: WorkflowRun[]
+  workflowCandidates?: WorkflowCandidate[]
 }
 
 // ===== GSD Workflow Types =====
