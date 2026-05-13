@@ -56,14 +56,14 @@ export default function SearchBar() {
         <div className="relative w-28">
           <Select
             value={filterStatus}
-            onChange={(val) => setFilterStatus(val as any)}
+            onChange={(val) => setFilterStatus(val)}
             options={[
               { label: '全部状态', value: 'all' },
               { label: '已完成', value: 'done' },
               { label: '生成中', value: 'running' },
               { label: '失败', value: 'error' },
               { label: '已弃置', value: 'trashed' },
-            ]}
+            ] as const}
             className="px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-white/[0.06] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
           />
         </div>

@@ -293,13 +293,13 @@ export default function InputBar() {
         { label: 'low', value: 'low' },
         { label: 'medium', value: 'medium' },
         { label: 'high', value: 'high' },
-      ]
+      ] as const
     : [
         { label: 'auto', value: 'auto' },
         { label: 'low', value: 'low' },
         { label: 'medium', value: 'medium' },
         { label: 'high', value: 'high' },
-      ]
+      ] as const
   const atImageLimit = inputImages.length >= API_MAX_IMAGES
   const maskTargetImage = maskDraft
     ? inputImages.find((img) => img.id === maskDraft.targetImageId) ?? null
@@ -1118,7 +1118,7 @@ export default function InputBar() {
         <Select
           value={settings.codexCli ? 'auto' : isFalProvider && params.quality === 'auto' ? 'high' : params.quality}
           onChange={(val) => {
-            if (!settings.codexCli) setParams({ quality: val as any })
+            if (!settings.codexCli) setParams({ quality: val })
           }}
           options={qualityOptions}
           disabled={settings.codexCli}
@@ -1135,12 +1135,12 @@ export default function InputBar() {
         <span className="text-gray-400 dark:text-gray-500 ml-1">格式</span>
         <Select
           value={params.output_format}
-          onChange={(val) => setParams({ output_format: val as any })}
+          onChange={(val) => setParams({ output_format: val })}
           options={[
             { label: 'PNG', value: 'png' },
             { label: 'JPEG', value: 'jpeg' },
             { label: 'WebP', value: 'webp' },
-          ]}
+          ] as const}
           className={selectClass}
         />
       </label>
@@ -1187,12 +1187,12 @@ export default function InputBar() {
         <Select
           value={moderationDisabled ? 'auto' : params.moderation}
           onChange={(val) => {
-            if (!moderationDisabled) setParams({ moderation: val as any })
+            if (!moderationDisabled) setParams({ moderation: val })
           }}
           options={[
             { label: 'auto', value: 'auto' },
             { label: 'low', value: 'low' },
-          ]}
+          ] as const}
           disabled={moderationDisabled}
           className={moderationDisabled
             ? 'px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed text-xs transition-all duration-200 shadow-sm'

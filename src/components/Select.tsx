@@ -2,9 +2,9 @@ import { useState, useRef, useEffect } from 'react'
 import { DEFAULT_DROPDOWN_MAX_HEIGHT } from '../lib/dropdown'
 import { ChevronDownIcon, EditIcon, PlusIcon, TrashIcon } from './icons'
 
-interface Option {
+interface Option<T extends string | number = string | number> {
   label: string
-  value: string | number
+  value: T
   variant?: 'action' | 'danger'
   actions?: Array<{
     label: string
@@ -13,15 +13,15 @@ interface Option {
   }>
 }
 
-interface SelectProps {
-  value: string | number
-  onChange: (value: any) => void
-  options: Option[]
+interface SelectProps<T extends string | number = string | number> {
+  value: T
+  onChange: (value: T) => void
+  options: readonly Option<T>[]
   disabled?: boolean
   className?: string
 }
 
-export default function Select({ value, onChange, options, disabled, className }: SelectProps) {
+export default function Select<T extends string | number = string | number>({ value, onChange, options, disabled, className }: SelectProps<T>) {
   const [isOpen, setIsOpen] = useState(false)
   const [menuMaxHeight, setMenuMaxHeight] = useState(DEFAULT_DROPDOWN_MAX_HEIGHT)
   const [placement, setPlacement] = useState<'bottom' | 'top'>('bottom')
