@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import type { TaskRecord } from '../types'
-import { useStore, ensureImageThumbnailCached, subscribeImageThumbnail, updateTaskInStore, retryTask, addWorkflowCandidateFromTask, rateTask, trashTask, restoreTask } from '../store'
+import { useStore, ensureImageThumbnailCached, subscribeImageThumbnail, retryTask, addWorkflowCandidateFromTask, rateTask, trashTask, restoreTask } from '../store'
 import { formatImageRatio } from '../lib/size'
 import { ParamValue } from '../lib/paramDisplay'
 import StarRating from './StarRating'

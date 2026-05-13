@@ -2,3 +2,11 @@ node_modules/
 dist/
 dev-proxy.config.json
 .wrangler/
+
+# 敏感文件 — API Key / 本地环境变量
+.env
+.env.*
+*.local
+
+# 治理文件 — .planning/ 仅存在于外层仓库
+.planning/

@@ -9,7 +9,9 @@
     "deploy:cf": "npm run build && wrangler deploy",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.0",

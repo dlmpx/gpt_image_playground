@@ -214,7 +214,6 @@ export default function CompareModal() {
 
     const ids = comparedCandidates.map((c) => c.primaryImageId)
     const initial: Record<string, string> = {}
-    const errorSet = new Set<string>()
     const loadingSet = new Set<string>()
 
     for (const id of ids) {

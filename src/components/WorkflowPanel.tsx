@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { useStore, createWorkflowRun, setActiveWorkflowRun, removeWorkflowRun, setShowWorkflowPanel, setActiveCandidate, setShowBranchTree, ensureImageCached, getCachedImage, setComparedCandidates, setShowCompareModal, crossStagePromoteCandidate, setCandidateDecision, updateCandidateNotes } from '../store'
+import { useStore, createWorkflowRun, setActiveWorkflowRun, removeWorkflowRun, setShowWorkflowPanel, setActiveCandidate, setShowBranchTree, ensureImageCached, setComparedCandidates, setShowCompareModal, crossStagePromoteCandidate, setCandidateDecision, updateCandidateNotes } from '../store'
 import { getTemplateByStage } from '../lib/workflowTemplates'
 import type { WorkflowStage, WorkflowCandidate, CandidateDecision } from '../types'
 import InlineChecklist from './InlineChecklist'

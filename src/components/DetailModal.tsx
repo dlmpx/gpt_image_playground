@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, updateTaskInStore, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun, backtrackCandidate, updateCandidateNotes, rateTask, trashTask, restoreTask } from '../store'
+import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, showCodexCliPrompt, getCodexCliPromptKey, retryTask, addWorkflowCandidateFromTask, promoteCandidateToStage, createWorkflowRun, backtrackCandidate, updateCandidateNotes, rateTask, trashTask, restoreTask } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { formatImageRatio } from '../lib/size'
@@ -16,15 +16,11 @@ export default function DetailModal() {
   const detailTaskId = useStore((s) => s.detailTaskId)
   const setDetailTaskId = useStore((s) => s.setDetailTaskId)
   const setLightboxImageId = useStore((s) => s.setLightboxImageId)
-  const setMaskEditorImageId = useStore((s) => s.setMaskEditorImageId)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
   const showToast = useStore((s) => s.showToast)
   const settings = useStore((s) => s.settings)
   const dismissedCodexCliPrompts = useStore((s) => s.dismissedCodexCliPrompts)
-  const workflowRuns = useStore((s) => s.workflowRuns)
   const workflowCandidates = useStore((s) => s.workflowCandidates)
-  const activeWorkflowRunId = useStore((s) => s.activeWorkflowRunId)
-  const setActiveWorkflowRun = useStore((s) => s.activeWorkflowRunId)
 
   const [imageIndex, setImageIndex] = useState(0)
   const [imageSrcs, setImageSrcs] = useState<Record<string, string>>({})
@@ -249,13 +245,6 @@ export default function DetailModal() {
 
   const handleEdit = () => {
     editOutputs(task)
-    setDetailTaskId(null)
-  }
-
-  const handleMaskEditCurrentOutput = () => {
-    const imgId = task.outputImages?.[imageIndex]
-    if (!imgId) return
-    setMaskEditorImageId(imgId)
     setDetailTaskId(null)
   }
 

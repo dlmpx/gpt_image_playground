@@ -27,7 +27,7 @@ function appendQuery(path: string, query?: Record<string, string>): string {
   return `${path}${path.includes('?') ? '&' : '?'}${params.toString()}`
 }
 
-function createOpenAICompatiblePaths(customProvider?: CustomProviderDefinition | null) {
+function createOpenAICompatiblePaths(_customProvider?: CustomProviderDefinition | null) {
   return {
     generationPath: 'images/generations',
     editPath: 'images/edits',
@@ -68,12 +68,6 @@ function getAllByPath(source: unknown, path: string | undefined): unknown[] {
   }
 
   return current.flatMap((item) => Array.isArray(item) ? item : [item]).filter((item) => item != null)
-}
-
-function normalizeImageApiPayload(value: unknown): ImageApiResponse {
-  if (Array.isArray(value)) return { data: value as ImageApiResponse['data'] }
-  if (value && typeof value === 'object') return value as ImageApiResponse
-  return { data: [] }
 }
 
 function createRequestHeaders(profile: ApiProfile): Record<string, string> {

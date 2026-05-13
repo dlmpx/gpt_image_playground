@@ -36,14 +36,12 @@ import { orderInputImagesForMask } from './lib/mask'
 import { getChangedParams, normalizeParamsForSettings } from './lib/paramCompatibility'
 import type {
   WorkflowStage,
-  WorkflowTemplate,
   WorkflowRun,
   WorkflowCandidate,
   CandidateDecision,
 } from './types'
 import {
   getAllWorkflowRuns,
-  getWorkflowCandidatesByRun,
   getAllWorkflowCandidates,
   putWorkflowRun,
   putWorkflowCandidate,
@@ -52,7 +50,7 @@ import {
   clearWorkflowRuns,
   clearWorkflowCandidates,
 } from './lib/db'
-import { zip, zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
+import { zip, unzipSync, strToU8, strFromU8 } from 'fflate'
 
 // ===== Image cache =====
 // 内存缓存，id → dataUrl。只保留少量最近使用图片，避免大量 4K data URL 常驻内存。
@@ -400,7 +398,7 @@ interface AppState {
 
 export const useStore = create<AppState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       // Settings
       settings: { ...DEFAULT_SETTINGS },
       setSettings: (s) => set((st) => {
@@ -1472,7 +1470,7 @@ export async function editOutputs(task: TaskRecord) {
 
 /** 删除多条任务 */
 export async function removeMultipleTasks(taskIds: string[]) {
-  const { tasks, setTasks, inputImages, showToast, clearSelection, selectedTaskIds } = useStore.getState()
+  const { tasks, setTasks, inputImages, showToast, selectedTaskIds } = useStore.getState()
   
   if (!taskIds.length) return
 

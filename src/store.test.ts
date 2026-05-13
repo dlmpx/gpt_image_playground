@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PARAMS } from './types'
 import { createDefaultFalProfile, createDefaultOpenAIProfile, DEFAULT_SETTINGS, normalizeSettings } from './lib/apiProfiles'
 import type { TaskRecord } from './types'
-import type { WorkflowRun, WorkflowCandidate, WorkflowStage, CandidateDecision } from './types'
+import type { WorkflowRun, WorkflowCandidate, WorkflowStage } from './types'
 import { editOutputs, getPersistedState, getTaskApiProfile, markInterruptedOpenAIRunningTasks, reuseConfig, submitTask, useStore } from './store'
 import {
   createWorkflowRun,
